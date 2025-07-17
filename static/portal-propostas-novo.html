@@ -686,7 +686,8 @@
             <div class="form-row single">
                 <div class="form-group">
                     <label for="prazoExecucao">Prazo Total <span class="required">*</span></label>
-                    <input type="text" id="prazoExecucao" placeholder="120 dias corridos" required>
+                    <input type="number" id="prazoExecucao" placeholder="120" required onchange="atualizarCronograma()">
+                    <div class="help-text">Digite apenas o número de dias. O cronograma será calculado automaticamente.</div>
                 </div>
             </div>
 
@@ -703,7 +704,7 @@
                 <thead>
                     <tr>
                         <th>Atividade</th>
-                        <th>Duração</th>
+                        <th>Duração (dias)</th>
                         <th>Início</th>
                         <th>Fim</th>
                         <th>Ação</th>
@@ -712,9 +713,9 @@
                 <tbody>
                     <tr>
                         <td><input type="text" placeholder="Mobilização"></td>
-                        <td><input type="text" placeholder="15 dias"></td>
-                        <td><input type="text" placeholder="Dia 1"></td>
-                        <td><input type="text" placeholder="Dia 15"></td>
+                        <td><input type="number" placeholder="15" onchange="recalcularCronograma()"></td>
+                        <td><input type="text" placeholder="Dia 1" readonly></td>
+                        <td><input type="text" placeholder="Dia 15" readonly></td>
                         <td><button type="button" class="remove-btn" onclick="removeRow(this)">×</button></td>
                     </tr>
                 </tbody>
@@ -834,7 +835,7 @@
             <div class="section-title">4.3 Preço Global</div>
             <div class="form-row">
                 <div class="form-group">
-                    <label for="valorTotal">Valor Total (Calculado Automaticamente)</label>
+                    <label for="valorTotal">Valor Total da Proposta</label>
                     <input type="text" id="valorTotal" placeholder="R$ 0,00" readonly style="background: #f8f9fa; font-weight: bold; font-size: 16px;">
                 </div>
                 <div class="form-group">
@@ -1011,9 +1012,9 @@
                 </div>
             </div>
 
-            <div class="section-title">4.8 Condições e Premissas Adicionais</div>
+            <div class="section-title">4.8 Condições</div>
             <div class="form-group">
-                <label for="validadeDetalhada">Condições de Validade</label>
+                <label for="validadeDetalhada">Condições</label>
                 <textarea id="validadeDetalhada" rows="3" placeholder="Proposta válida por 60 dias. Preços sujeitos a reajuste após este período."></textarea>
             </div>
         </div>
@@ -1179,14 +1180,51 @@
                     },
                     body: JSON.stringify({
                         protocolo: protocolo,
-                        dados: dados.dados,
-                        resumo: dados.resumo,
-                        tecnica: dados.tecnica,
-                        comercial: dados.comercial
+                        processo: dados.processo,
+                        razao_social: dados.dados.razaoSocial,
+                        cnpj: dados.dados.cnpj,
+                        endereco: dados.dados.endereco,
+                        telefone: dados.dados.telefone,
+                        email: dados.dados.email,
+                        responsavel_tecnico: dados.dados.respTecnico,
+                        modalidade: 'Pregão',
+                        objeto: dados.tecnica.objetoConcorrencia,
+                        valor_estimado: 0,
+                        prazo_execucao: dados.tecnica.prazoExecucao,
+                        
+                        // Dados técnicos completos
+                        objeto_licitacao: dados.tecnica.objetoConcorrencia,
+                        escopo_inclusos: dados.tecnica.escopoInclusos,
+                        escopo_exclusos: dados.tecnica.escopoExclusos,
+                        metodologia: dados.tecnica.metodologia,
+                        sequencia_execucao: dados.tecnica.sequenciaExecucao,
+                        servicos_tecnica: dados.tecnica.servicosTecnica,
+                        equipe_tecnica: dados.tecnica.equipe,
+                        materiais: dados.tecnica.materiais,
+                        equipamentos: dados.tecnica.equipamentos,
+                        prazo_mobilizacao: dados.tecnica.prazoMobilizacao,
+                        cronograma: dados.tecnica.cronograma,
+                        garantias: dados.tecnica.garantias,
+                        estrutura_canteiro: dados.tecnica.estruturaCanteiro,
+                        obrigacoes_contratada: dados.tecnica.obrigacoesContratada,
+                        obrigacoes_contratante: dados.tecnica.obrigacoesContratante,
+                        experiencia: dados.tecnica.experiencia,
+                        certificacoes: dados.tecnica.certificacoes,
+                        
+                        // Dados comerciais
+                        valor_total: dados.comercial.valorTotal,
+                        condicoes_pagamento: dados.resumo.formaPagamento,
+                        validade_proposta: dados.comercial.validadeProposta,
+                        itens_orcamento: dados.comercial.servicos
                     })
                 });
 
                 const result = await response.json();
+                
+                if (response.status === 409 && result.codigo === 'CNPJ_JA_ENVIADO') {
+                    alert('❌ Este CNPJ já enviou uma proposta para este processo!');
+                    return false;
+                }
                 
                 if (result.success) {
                     console.log('✅ E-mail enviado com sucesso!');
@@ -1252,6 +1290,37 @@
             document.getElementById('precoTotalResumo').textContent = valorTotal;
         }
 
+        // Função para atualizar cronograma automaticamente
+        function atualizarCronograma() {
+            const prazoTotal = document.getElementById('prazoExecucao').value;
+            if (prazoTotal) {
+                document.getElementById('prazoExecucaoResumo').value = prazoTotal + ' dias corridos';
+                atualizarResumo();
+                recalcularCronograma();
+            }
+        }
+
+        // Função para recalcular cronograma com base nos dias
+        function recalcularCronograma() {
+            const rows = document.querySelectorAll('#cronogramaTable tbody tr');
+            let diaInicio = 1;
+            
+            rows.forEach(row => {
+                const duracaoInput = row.cells[1].querySelector('input');
+                const inicioInput = row.cells[2].querySelector('input');
+                const fimInput = row.cells[3].querySelector('input');
+                
+                const duracao = parseInt(duracaoInput.value) || 0;
+                
+                if (duracao > 0) {
+                    const diaFim = diaInicio + duracao - 1;
+                    inicioInput.value = `Dia ${diaInicio}`;
+                    fimInput.value = `Dia ${diaFim}`;
+                    diaInicio = diaFim + 1;
+                }
+            });
+        }
+
         function copiarObjetoParaComercial() {
             const objetoTecnico = document.getElementById('objetoConcorrencia').value;
             document.getElementById('objetoComercial').value = objetoTecnico;
@@ -1299,11 +1368,12 @@
             const newRow = tbody.insertRow();
             newRow.innerHTML = `
                 <td><input type="text" placeholder="Atividade"></td>
-                <td><input type="text" placeholder="Duração"></td>
-                <td><input type="text" placeholder="Início"></td>
-                <td><input type="text" placeholder="Fim"></td>
+                <td><input type="number" placeholder="30" onchange="recalcularCronograma()"></td>
+                <td><input type="text" placeholder="Dia X" readonly></td>
+                <td><input type="text" placeholder="Dia Y" readonly></td>
                 <td><button type="button" class="remove-btn" onclick="removeRow(this)">×</button></td>
             `;
+            recalcularCronograma();
         }
 
         function addExperienciaRow() {
@@ -1584,6 +1654,11 @@
                 renumerarTabela('servicosTecnicaTable');
             }
             
+            // Recalcular cronograma se for da tabela de cronograma
+            if (table.id === 'cronogramaTable') {
+                recalcularCronograma();
+            }
+            
             calcularTotais();
         }
 
@@ -1728,6 +1803,8 @@
             document.getElementById('bdiPercentual').textContent = totalBDI.toFixed(1);
     	    document.getElementById('bdiValor').textContent = formatarMoeda(valorBDI);
             document.getElementById('valorTotalCalculado').textContent = formatarMoeda(valorTotal);
+            
+            // Atualizar campo de valor total para mostrar apenas o valor calculado
             document.getElementById('valorTotal').value = 'R$ ' + formatarMoeda(valorTotal);
             
             atualizarResumo();
@@ -1777,7 +1854,7 @@
                     <p><strong>Empresa:</strong> ${empresa}</p>
                     <p><strong>Processo:</strong> ${document.getElementById('numeroProcesso').value}</p>
                     <p><strong>Objeto:</strong> ${document.getElementById('objetoProcesso').value}</p>
-                    <p><strong>Prazo de Execução:</strong> ${prazo}</p>
+                    <p><strong>Prazo de Execução:</strong> ${prazo} dias</p>
                     <p><strong>Valor Total:</strong> R$ ${valorTotal}</p>
                 </div>
                 
@@ -1848,6 +1925,7 @@
 
         function coletarDados() {
             return {
+                processo: document.getElementById('numeroProcesso').value,
                 dados: {
                     razaoSocial: document.getElementById('razaoSocial').value,
                     cnpj: document.getElementById('cnpj').value,
@@ -1935,6 +2013,19 @@
                 return;
             }
             
+            // Verificar CNPJ duplicado
+            const cnpj = document.getElementById('cnpj').value;
+            const processo = document.getElementById('numeroProcesso').value;
+            
+            // Verificar no localStorage primeiro
+            const propostas = JSON.parse(localStorage.getItem('propostas') || '[]');
+            const jaEnviou = propostas.some(p => p.processo === processo && p.cnpj === cnpj);
+            
+            if (jaEnviou) {
+                mostrarMensagem('❌ Este CNPJ já enviou uma proposta para este processo!', 'error');
+                return;
+            }
+            
             // Ao invés de enviar direto, mostrar modal de revisão
             gerarRevisaoFinal();
             document.getElementById('modalRevisao').style.display = 'block';
@@ -1986,7 +2077,7 @@
                     </div>
                     <div class="revisao-item">
                         <span class="revisao-label">Prazo de Execução:</span>
-                        <span class="revisao-valor">${dados.tecnica.prazoExecucao || 'Não informado'}</span>
+                        <span class="revisao-valor">${dados.tecnica.prazoExecucao || 'Não informado'} dias</span>
                     </div>
                     <div class="revisao-item">
                         <span class="revisao-label">Validade da Proposta:</span>
@@ -2059,6 +2150,11 @@
             
             // Tentar enviar por e-mail real
             const emailEnviado = await enviarPropostaReal(dados, protocolo);
+            
+            // Se houve erro de CNPJ duplicado, parar aqui
+            if (emailEnviado === false) {
+                return;
+            }
             
             // Simular envio bem-sucedido
             setTimeout(() => {
