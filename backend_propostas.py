@@ -91,16 +91,20 @@ def calcular_totais_comerciais(dados):
                 return float(value.replace('.', '').replace(',', '.').replace('R$', '').strip())
             return float(value or 0)
         
-        servicos = str_to_float(comercial.get('totalServicos', 0))
+        # Separar os totais
+        total_servicos = str_to_float(comercial.get('totalServicos', 0))  # Total da Tabela de Serviços
         mao_obra = str_to_float(comercial.get('totalMaoObra', 0))
         materiais = str_to_float(comercial.get('totalMateriais', 0))
         equipamentos = str_to_float(comercial.get('totalEquipamentos', 0))
         
-        custo_direto = servicos + mao_obra + materiais + equipamentos
+        # Custo direto = MO + Mat + Equip (SEM incluir serviços)
+        custo_direto = mao_obra + materiais + equipamentos
         
+        # BDI sobre o custo direto
         bdi_percentual = float(comercial.get('bdiPercentual', 0))
         bdi_valor = custo_direto * (bdi_percentual / 100)
         
+        # Valor total = Custo Direto + BDI
         valor_total = custo_direto + bdi_valor
         
         # Formatar valores para exibição
@@ -108,7 +112,7 @@ def calcular_totais_comerciais(dados):
             return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
         
         return {
-            'servicos': format_currency(servicos),
+            'servicos': format_currency(total_servicos),
             'mao_obra': format_currency(mao_obra),
             'materiais': format_currency(materiais),
             'equipamentos': format_currency(equipamentos),
@@ -133,15 +137,20 @@ def calcular_totais_comerciais(dados):
         }
 
 def gerar_word_proposta(dados, protocolo):
-    """Gera documento Word da proposta"""
+    """Gera documento Word com a proposta técnica completa"""
     if not DOCX_AVAILABLE:
         return None
         
     try:
         doc = Document()
         
-        # Título
-        titulo = doc.add_heading(f'PROPOSTA TÉCNICA E COMERCIAL', 0)
+        # Configurar estilos
+        style = doc.styles['Normal']
+        style.font.name = 'Arial'
+        style.font.size = Pt(11)
+        
+        # Título Principal
+        titulo = doc.add_heading('PROPOSTA TÉCNICA E COMERCIAL', 0)
         titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
         # Protocolo
@@ -149,9 +158,12 @@ def gerar_word_proposta(dados, protocolo):
         p.add_run(f'Protocolo: {protocolo}').bold = True
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
+        # Data
+        doc.add_paragraph(f'Data: {datetime.now().strftime("%d/%m/%Y")}')
+        doc.add_paragraph()
+        
         # 1. DADOS DA EMPRESA
         doc.add_heading('1. DADOS DA EMPRESA', level=1)
-        
         table = doc.add_table(rows=8, cols=2)
         table.style = 'Light Grid Accent 1'
         
@@ -159,16 +171,17 @@ def gerar_word_proposta(dados, protocolo):
             ('Razão Social:', dados.get('dados', {}).get('razaoSocial', '')),
             ('CNPJ:', dados.get('dados', {}).get('cnpj', '')),
             ('Endereço:', dados.get('dados', {}).get('endereco', '')),
+            ('Cidade:', dados.get('dados', {}).get('cidade', '')),
             ('Telefone:', dados.get('dados', {}).get('telefone', '')),
             ('E-mail:', dados.get('dados', {}).get('email', '')),
             ('Responsável Técnico:', dados.get('dados', {}).get('respTecnico', '')),
-            ('CREA/CAU:', dados.get('dados', {}).get('crea', '')),
-            ('Validade Proposta:', dados.get('comercial', {}).get('validadeProposta', '60 dias'))
+            ('CREA/CAU:', dados.get('dados', {}).get('crea', ''))
         ]
         
         for i, (label, value) in enumerate(dados_empresa):
             table.cell(i, 0).text = label
-            table.cell(i, 1).text = value
+            table.cell(i, 1).text = value or 'Não informado'
+            table.cell(i, 0).paragraphs[0].runs[0].font.bold = True
         
         # 2. OBJETO DA CONCORRÊNCIA
         doc.add_page_break()
@@ -178,30 +191,187 @@ def gerar_word_proposta(dados, protocolo):
         # 3. ESCOPO DOS SERVIÇOS
         doc.add_heading('3. ESCOPO DOS SERVIÇOS', level=1)
         
-        doc.add_heading('3.1 Serviços Inclusos', level=2)
+        doc.add_heading('3.1 Serviços Inclusos no Escopo', level=2)
         escopo_inclusos = dados.get('tecnica', {}).get('escopoInclusos', '')
         if escopo_inclusos:
             for item in escopo_inclusos.split('\n'):
                 if item.strip():
                     doc.add_paragraph(f'• {item.strip()}', style='List Bullet')
         
-        doc.add_heading('3.2 Serviços Excluídos', level=2)
+        doc.add_heading('3.2 Serviços NÃO Inclusos no Escopo', level=2)
         escopo_excluidos = dados.get('tecnica', {}).get('escopoExclusos', '')
         if escopo_excluidos:
             doc.add_paragraph(escopo_excluidos)
         
-        # 4. METODOLOGIA
-        doc.add_heading('4. METODOLOGIA DE EXECUÇÃO', level=1)
+        # 4. METODOLOGIA E PLANO DE ATAQUE
+        doc.add_heading('4. METODOLOGIA E PLANO DE ATAQUE', level=1)
+        
+        doc.add_heading('4.1 Metodologia de Execução', level=2)
         doc.add_paragraph(dados.get('tecnica', {}).get('metodologia', ''))
         
-        # 5. PRAZO
-        doc.add_heading('5. PRAZO DE EXECUÇÃO', level=1)
-        doc.add_paragraph(f"Prazo total: {dados.get('resumo', {}).get('prazoExecucao', 'Não informado')}")
+        doc.add_heading('4.2 Sequência de Execução', level=2)
+        doc.add_paragraph(dados.get('tecnica', {}).get('sequenciaExecucao', ''))
         
-        # 6. VALOR DA PROPOSTA
-        doc.add_heading('6. VALOR DA PROPOSTA', level=1)
+        # 5. PRAZO E CRONOGRAMA
+        doc.add_page_break()
+        doc.add_heading('5. PRAZO E CRONOGRAMA', level=1)
+        
+        doc.add_heading('5.1 Prazos', level=2)
+        table_prazos = doc.add_table(rows=4, cols=2)
+        table_prazos.style = 'Light Grid Accent 1'
+        
+        prazos = [
+            ('Prazo Total de Execução:', dados.get('tecnica', {}).get('prazoExecucao', '') + ' dias'),
+            ('Início dos Serviços:', dados.get('tecnica', {}).get('inicioServicos', 'Após assinatura do contrato')),
+            ('Prazo de Mobilização:', dados.get('tecnica', {}).get('prazoMobilizacao', '15 dias')),
+            ('Instalação do Canteiro:', dados.get('tecnica', {}).get('instalacaoCanteiro', '10 dias'))
+        ]
+        
+        for i, (label, value) in enumerate(prazos):
+            table_prazos.cell(i, 0).text = label
+            table_prazos.cell(i, 1).text = value
+            table_prazos.cell(i, 0).paragraphs[0].runs[0].font.bold = True
+        
+        # Cronograma detalhado
+        doc.add_heading('5.2 Cronograma Detalhado', level=2)
+        cronograma = dados.get('tecnica', {}).get('cronograma', [])
+        if cronograma and len(cronograma) > 0:
+            table_crono = doc.add_table(rows=len(cronograma)+1, cols=4)
+            table_crono.style = 'Light Grid Accent 1'
+            
+            headers = ['Atividade', 'Duração', 'Início', 'Fim']
+            for i, header in enumerate(headers):
+                cell = table_crono.cell(0, i)
+                cell.text = header
+                cell.paragraphs[0].runs[0].font.bold = True
+            
+            for i, row in enumerate(cronograma):
+                for j in range(min(4, len(row))):
+                    table_crono.cell(i+1, j).text = str(row[j]) if row[j] else ''
+        
+        # 6. EQUIPE TÉCNICA
+        doc.add_heading('6. EQUIPE TÉCNICA', level=1)
+        equipe = dados.get('tecnica', {}).get('equipe', [])
+        if equipe and len(equipe) > 0:
+            table_equipe = doc.add_table(rows=len(equipe)+1, cols=5)
+            table_equipe.style = 'Light Grid Accent 1'
+            
+            headers = ['Função', 'Nome', 'Formação', 'Experiência', 'Registro']
+            for i, header in enumerate(headers):
+                cell = table_equipe.cell(0, i)
+                cell.text = header
+                cell.paragraphs[0].runs[0].font.bold = True
+            
+            for i, row in enumerate(equipe):
+                for j in range(min(5, len(row))):
+                    table_equipe.cell(i+1, j).text = str(row[j]) if row[j] else ''
+        
+        # 7. RECURSOS NECESSÁRIOS
+        doc.add_page_break()
+        doc.add_heading('7. RECURSOS NECESSÁRIOS', level=1)
+        
+        # Lista de Materiais
+        doc.add_heading('7.1 Lista de Materiais', level=2)
+        materiais = dados.get('tecnica', {}).get('materiais', [])
+        if materiais and len(materiais) > 0:
+            table_mat = doc.add_table(rows=len(materiais)+1, cols=4)
+            table_mat.style = 'Light Grid Accent 1'
+            
+            headers = ['Material', 'Especificação', 'Unidade', 'Quantidade']
+            for i, header in enumerate(headers):
+                cell = table_mat.cell(0, i)
+                cell.text = header
+                cell.paragraphs[0].runs[0].font.bold = True
+            
+            for i, row in enumerate(materiais):
+                for j in range(min(4, len(row))):
+                    table_mat.cell(i+1, j).text = str(row[j]) if row[j] else ''
+        
+        # Lista de Equipamentos
+        doc.add_heading('7.2 Lista de Equipamentos', level=2)
+        equipamentos = dados.get('tecnica', {}).get('equipamentos', [])
+        if equipamentos and len(equipamentos) > 0:
+            table_equip = doc.add_table(rows=len(equipamentos)+1, cols=4)
+            table_equip.style = 'Light Grid Accent 1'
+            
+            headers = ['Equipamento', 'Especificação', 'Unidade', 'Quantidade']
+            for i, header in enumerate(headers):
+                cell = table_equip.cell(0, i)
+                cell.text = header
+                cell.paragraphs[0].runs[0].font.bold = True
+            
+            for i, row in enumerate(equipamentos):
+                for j in range(min(4, len(row))):
+                    table_equip.cell(i+1, j).text = str(row[j]) if row[j] else ''
+        
+        # 8. ESTRUTURA DE CANTEIRO E OBRIGAÇÕES
+        doc.add_heading('8. ESTRUTURA DE CANTEIRO E OBRIGAÇÕES', level=1)
+        
+        doc.add_heading('8.1 Estrutura do Canteiro', level=2)
+        doc.add_paragraph(dados.get('tecnica', {}).get('estruturaCanteiro', ''))
+        
+        doc.add_heading('8.2 Obrigações da Contratada', level=2)
+        doc.add_paragraph(dados.get('tecnica', {}).get('obrigacoesContratada', ''))
+        
+        doc.add_heading('8.3 Obrigações da Contratante', level=2)
+        doc.add_paragraph(dados.get('tecnica', {}).get('obrigacoesContratante', ''))
+        
+        # 9. GARANTIAS
+        doc.add_heading('9. GARANTIAS OFERECIDAS', level=1)
+        doc.add_paragraph(dados.get('tecnica', {}).get('garantias', ''))
+        
+        # 10. EXPERIÊNCIA DA EMPRESA
+        doc.add_heading('10. EXPERIÊNCIA DA EMPRESA', level=1)
+        doc.add_paragraph(dados.get('tecnica', {}).get('experienciaEmpresa', ''))
+        
+        # 11. ATESTADOS TÉCNICOS
+        doc.add_heading('11. ATESTADOS TÉCNICOS', level=1)
+        doc.add_paragraph(dados.get('tecnica', {}).get('atestadosObras', ''))
+        
+        # 12. CONDIÇÕES COMERCIAIS
+        doc.add_page_break()
+        doc.add_heading('12. CONDIÇÕES COMERCIAIS', level=1)
+        
+        # Tabela resumo financeiro
         totais = calcular_totais_comerciais(dados)
-        doc.add_paragraph(f"Valor Total: {totais['valor_total']}", style='Heading 2')
+        table_financeiro = doc.add_table(rows=8, cols=2)
+        table_financeiro.style = 'Light Grid Accent 1'
+        
+        valores_financeiros = [
+            ('Mão de Obra:', totais['mao_obra']),
+            ('Materiais:', totais['materiais']),
+            ('Equipamentos:', totais['equipamentos']),
+            ('Custo Direto:', totais['custo_direto']),
+            (f'BDI ({totais["bdi_percentual"]}%):', totais['bdi_valor']),
+            ('VALOR TOTAL:', totais['valor_total']),
+            ('Prazo de Execução:', dados.get('resumo', {}).get('prazoExecucao', '')),
+            ('Validade da Proposta:', dados.get('comercial', {}).get('validadeProposta', '60 dias'))
+        ]
+        
+        for i, (label, value) in enumerate(valores_financeiros):
+            table_financeiro.cell(i, 0).text = label
+            table_financeiro.cell(i, 1).text = str(value)
+            table_financeiro.cell(i, 0).paragraphs[0].runs[0].font.bold = True
+            if i == 5:  # Valor total
+                table_financeiro.cell(i, 1).paragraphs[0].runs[0].font.bold = True
+        
+        # 13. CONDIÇÕES
+        doc.add_heading('13. CONDIÇÕES', level=1)
+        condicoes = dados.get('tecnica', {}).get('condicoesPremissas', '')
+        if condicoes:
+            doc.add_paragraph(condicoes)
+        
+        # 14. OBSERVAÇÕES FINAIS
+        doc.add_heading('14. OBSERVAÇÕES FINAIS', level=1)
+        doc.add_paragraph(dados.get('tecnica', {}).get('observacoesFinais', ''))
+        
+        # Assinatura
+        doc.add_paragraph()
+        doc.add_paragraph()
+        doc.add_paragraph('_' * 50)
+        doc.add_paragraph(dados.get('dados', {}).get('respTecnico', ''))
+        doc.add_paragraph(f'CREA/CAU: {dados.get("dados", {}).get("crea", "")}')
+        doc.add_paragraph(f'Data: {datetime.now().strftime("%d/%m/%Y")}')
         
         # Salvar em memória
         word_buffer = BytesIO()
@@ -279,6 +449,7 @@ def home():
                 "/api/propostas/<id>",
                 "/api/propostas/listar",
                 "/api/processos/listar",
+                "/api/verificar-cnpj",
                 "/api/download/<tipo>/<id>"
             ]
         }), 200
@@ -307,6 +478,25 @@ def enviar_proposta():
     try:
         dados = request.get_json(force=True)
         logger.info(f"Recebendo proposta: {dados.get('protocolo')}")
+        
+        # Validação de CNPJ duplicado por processo
+        cnpj = dados.get('dados', {}).get('cnpj', '').replace('.', '').replace('-', '').replace('/', '')
+        processo = dados.get('processo', '')
+        
+        if cnpj and processo:
+            # Verificar se já existe proposta deste CNPJ para este processo
+            for prop_id, prop in propostas_db.items():
+                cnpj_existente = prop.get('dados_empresa', {}).get('cnpj', '').replace('.', '').replace('-', '').replace('/', '')
+                processo_existente = prop.get('processo', '')
+                
+                if cnpj_existente == cnpj and processo_existente == processo:
+                    logger.warning(f"CNPJ duplicado: {cnpj} já tem proposta para processo {processo}")
+                    return jsonify({
+                        "sucesso": False,
+                        "erro": "CNPJ já possui proposta para este processo",
+                        "detalhes": f"Protocolo anterior: {prop.get('protocolo')}",
+                        "data_anterior": prop.get('data_criacao')
+                    }), 409  # Conflict
         
         # Gera ID único
         proposta_id = str(uuid.uuid4())
@@ -379,6 +569,36 @@ def enviar_proposta():
             "erro": "Erro ao processar proposta",
             "detalhes": str(e)
         }), 500
+
+@app.route('/api/verificar-cnpj', methods=['POST'])
+def verificar_cnpj():
+    """Verifica se CNPJ já tem proposta para o processo"""
+    try:
+        data = request.get_json()
+        cnpj = data.get('cnpj', '').replace('.', '').replace('-', '').replace('/', '')
+        processo = data.get('processo', '')
+        
+        if not cnpj or not processo:
+            return jsonify({"erro": "CNPJ e processo são obrigatórios"}), 400
+        
+        # Verificar duplicação
+        for prop_id, prop in propostas_db.items():
+            cnpj_existente = prop.get('dados_empresa', {}).get('cnpj', '').replace('.', '').replace('-', '').replace('/', '')
+            processo_existente = prop.get('processo', '')
+            
+            if cnpj_existente == cnpj and processo_existente == processo:
+                return jsonify({
+                    "duplicado": True,
+                    "protocolo": prop.get('protocolo'),
+                    "data": prop.get('data_criacao'),
+                    "empresa": prop.get('dados_empresa', {}).get('razaoSocial', '')
+                }), 200
+        
+        return jsonify({"duplicado": False}), 200
+        
+    except Exception as e:
+        logger.error(f"Erro ao verificar CNPJ: {str(e)}")
+        return jsonify({"erro": "Erro ao verificar CNPJ"}), 500
 
 @app.route('/api/propostas/<proposta_id>', methods=['GET'])
 def obter_proposta(proposta_id):
