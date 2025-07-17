@@ -1,30 +1,4 @@
-services:
-  # Serviço Web Principal
-  - type: web
-    name: sistema-propostas-backend
-    runtime: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn backend_propostas:app --bind 0.0.0.0:$PORT"
-    
-    # Configurações de ambiente
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
-      
-      # Variáveis opcionais para email (adicione se precisar)
-      # - key: EMAIL_USER
-      #   sync: false  # Define manualmente no painel
-      # - key: EMAIL_PASS
-      #   sync: false  # Define manualmente no painel
-    
-    # Deploy automático quando fizer push no GitHub
-    autoDeploy: true
-    
-    # Health check
-    healthCheckPath: /api/status
-    
-    # Configurações do plano gratuito
-    plan: free
-    
-    # Região (escolha a mais próxima)
-    region: oregon  # ou singapore, frankfurt, ohio
+# Substitua o conteúdo do render.yaml pelo novo
+git add render.yaml
+git commit -m "Ajustar configuração do Render"
+git push origin main
