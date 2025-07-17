@@ -255,6 +255,12 @@
             border: 1px solid #cfc;
         }
 
+        .alert-info {
+            background: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #bbdefb;
+        }
+
         .loading {
             display: inline-block;
             width: 20px;
@@ -371,7 +377,9 @@
     </div>
 
     <script>
-        // Inicializar sistema com usuários padrão se não existir
+        // ===== SISTEMA DE LOGIN CORRIGIDO =====
+        
+        // Inicializar sistema com usuários padrão
         function inicializarUsuarios() {
             const usuarios = localStorage.getItem('usuarios_sistema');
             
@@ -381,7 +389,7 @@
                         id: 'admin001',
                         nome: 'Administrador',
                         email: 'admin@sistema.com',
-                        senha: btoa('admin123'), // Em produção, usar hash real
+                        senha: btoa('admin123'),
                         tipo: 'admin',
                         ativo: true,
                         dataCriacao: new Date().toISOString()
@@ -393,17 +401,6 @@
                         senha: btoa('comprador123'),
                         tipo: 'comprador',
                         nivelAcesso: 'comprador',
-                        departamento: 'Compras',
-                        ativo: true,
-                        dataCriacao: new Date().toISOString()
-                    },
-                    {
-                        id: 'comp002',
-                        nome: 'Maria Santos',
-                        email: 'maria.santos@empresa.com',
-                        senha: btoa('comprador456'),
-                        tipo: 'comprador',
-                        nivelAcesso: 'comprador_senior',
                         departamento: 'Compras',
                         ativo: true,
                         dataCriacao: new Date().toISOString()
@@ -421,92 +418,107 @@
                 ];
                 
                 localStorage.setItem('usuarios_sistema', JSON.stringify(usuariosPadrao));
-                
-                // Mostrar credenciais padrão
-                mostrarAlerta('info', `Sistema inicializado! Credenciais disponíveis:
-                
-                ADMIN: admin@sistema.com / admin123
-                COMPRADOR: joao.silva@empresa.com / comprador123
-                COMPRADOR SENIOR: maria.santos@empresa.com / comprador456
-                FORNECEDOR: demo@empresa.com / demo123`);
+                console.log('✅ Sistema inicializado com usuários padrão');
             }
         }
 
-        // Realizar login
+        // Realizar login - VERSÃO CORRIGIDA
         function realizarLogin(event) {
             event.preventDefault();
             
-            const email = document.getElementById('email').value;
+            const email = document.getElementById('email').value.trim();
             const senha = document.getElementById('senha').value;
             const lembrar = document.getElementById('lembrar').checked;
+            
+            console.log('🔐 Tentativa de login:', email);
+            
+            // Validações básicas
+            if (!email || !senha) {
+                mostrarAlerta('error', 'Por favor, preencha todos os campos.');
+                return;
+            }
             
             // Mostrar loading
             const btnLogin = document.getElementById('btnLogin');
             btnLogin.innerHTML = 'Entrando... <span class="loading"></span>';
             btnLogin.disabled = true;
             
-            // Simular delay de rede
+            // Simular delay de rede realista
             setTimeout(() => {
-                const usuarios = JSON.parse(localStorage.getItem('usuarios_sistema') || '[]');
-                
-                const usuario = usuarios.find(u => 
-                    u.email === email && 
-                    u.senha === btoa(senha) && // Em produção, usar verificação de hash
-                    u.ativo === true
-                );
-                
-                if (usuario) {
-                    // Login bem-sucedido
-                    const sessao = {
-                        usuarioId: usuario.id,
-                        nome: usuario.nome,
-                        email: usuario.email,
-                        tipo: usuario.tipo,
-                        nivelAcesso: usuario.nivelAcesso || null,
-                        cnpj: usuario.cnpj || null,
-                        departamento: usuario.departamento || null,
-                        inicio: new Date().toISOString(),
-                        token: gerarToken()
-                    };
+                try {
+                    const usuarios = JSON.parse(localStorage.getItem('usuarios_sistema') || '[]');
+                    console.log('👥 Usuários disponíveis:', usuarios.length);
                     
-                    // Salvar sessão
-                    sessionStorage.setItem('sessao_ativa', JSON.stringify(sessao));
+                    const usuario = usuarios.find(u => 
+                        u.email.toLowerCase() === email.toLowerCase() && 
+                        u.senha === btoa(senha) && 
+                        u.ativo === true
+                    );
                     
-                    // Se marcou "lembrar-me", salvar em localStorage
-                    if (lembrar) {
-                        localStorage.setItem('email_salvo', email);
-                    } else {
-                        localStorage.removeItem('email_salvo');
-                    }
-                    
-                    // Registrar log de acesso
-                    registrarAcesso(usuario.id, 'login', 'sucesso');
-                    
-                    mostrarAlerta('success', 'Login realizado com sucesso! Redirecionando...');
-                    
-                    // Redirecionar baseado no tipo de usuário
-                    setTimeout(() => {
-                        if (usuario.tipo === 'admin' || usuario.tipo === 'comprador') {
-                            window.location.href = 'sistema-gestao-corrigido2.html';
-                        } else if (usuario.tipo === 'fornecedor') {
-                            window.location.href = 'dashboard-fornecedor.html';
-                        } else if (usuario.tipo === 'auditor') {
-                            window.location.href = 'dashboard-auditor.html';
+                    if (usuario) {
+                        console.log('✅ Login bem-sucedido para:', usuario.nome);
+                        
+                        // Criar sessão
+                        const sessao = {
+                            usuarioId: usuario.id,
+                            nome: usuario.nome,
+                            email: usuario.email,
+                            tipo: usuario.tipo,
+                            nivelAcesso: usuario.nivelAcesso || null,
+                            cnpj: usuario.cnpj || null,
+                            departamento: usuario.departamento || null,
+                            inicio: new Date().toISOString(),
+                            token: gerarToken()
+                        };
+                        
+                        // Salvar sessão
+                        sessionStorage.setItem('sessao_ativa', JSON.stringify(sessao));
+                        console.log('💾 Sessão criada:', sessao);
+                        
+                        // Lembrar email se solicitado
+                        if (lembrar) {
+                            localStorage.setItem('email_salvo', email);
+                        } else {
+                            localStorage.removeItem('email_salvo');
                         }
-                    }, 1500);
+                        
+                        // Registrar log
+                        registrarAcesso(usuario.id, 'login', 'sucesso');
+                        
+                        mostrarAlerta('success', 'Login realizado com sucesso! Redirecionando...');
+                        
+                        // Redirecionar baseado no tipo
+                        setTimeout(() => {
+                            if (usuario.tipo === 'admin' || usuario.tipo === 'comprador') {
+                                console.log('🔄 Redirecionando para sistema de gestão...');
+                                window.location.href = 'sistema-gestao-corrigido2.html';
+                            } else if (usuario.tipo === 'fornecedor') {
+                                console.log('🔄 Redirecionando para dashboard fornecedor...');
+                                window.location.href = 'dashboard-fornecedor.html';
+                            } else {
+                                console.log('🔄 Redirecionando para dashboard padrão...');
+                                window.location.href = 'dashboard.html';
+                            }
+                        }, 1500);
+                        
+                    } else {
+                        console.log('❌ Login falhou para:', email);
+                        mostrarAlerta('error', 'E-mail ou senha incorretos!');
+                        registrarAcesso(email, 'login', 'falha');
+                        
+                        // Reset do botão
+                        btnLogin.innerHTML = 'Entrar';
+                        btnLogin.disabled = false;
+                    }
+                } catch (error) {
+                    console.error('💥 Erro no login:', error);
+                    mostrarAlerta('error', 'Erro interno. Tente novamente.');
                     
-                } else {
-                    // Login falhou
-                    mostrarAlerta('error', 'E-mail ou senha incorretos!');
-                    registrarAcesso(email, 'login', 'falha');
-                    
-                    // Verificar tentativas de login
-                    verificarTentativas(email);
-                    
+                    // Reset do botão
                     btnLogin.innerHTML = 'Entrar';
                     btnLogin.disabled = false;
                 }
-            }, 1000);
+            }, 800);
         }
 
         // Toggle visibilidade da senha
@@ -530,10 +542,12 @@
             alertBox.textContent = mensagem;
             alertBox.style.display = 'block';
             
+            console.log(`📢 Alerta ${tipo}:`, mensagem);
+            
             if (tipo === 'success') {
                 setTimeout(() => {
                     alertBox.style.display = 'none';
-                }, 3000);
+                }, 5000);
             }
         }
 
@@ -550,7 +564,7 @@
                 usuarioId: usuarioId,
                 acao: acao,
                 resultado: resultado,
-                ip: 'local', // Em produção, capturar IP real
+                ip: 'local',
                 timestamp: new Date().toISOString()
             });
             
@@ -562,35 +576,15 @@
             localStorage.setItem('logs_acesso', JSON.stringify(logs));
         }
 
-        // Verificar tentativas de login
-        function verificarTentativas(email) {
-            const tentativas = JSON.parse(localStorage.getItem('tentativas_login') || '{}');
-            
-            if (!tentativas[email]) {
-                tentativas[email] = { count: 0, ultimaTentativa: new Date().toISOString() };
-            }
-            
-            tentativas[email].count++;
-            tentativas[email].ultimaTentativa = new Date().toISOString();
-            
-            if (tentativas[email].count >= 3) {
-                mostrarAlerta('error', 'Muitas tentativas falhas. Tente novamente em 15 minutos.');
-                // Em produção, implementar bloqueio temporário real
-            }
-            
-            localStorage.setItem('tentativas_login', JSON.stringify(tentativas));
-        }
-
         // Esqueci senha
         function esqueciSenha() {
             const email = prompt('Digite seu e-mail cadastrado:');
             
             if (email) {
                 const usuarios = JSON.parse(localStorage.getItem('usuarios_sistema') || '[]');
-                const usuario = usuarios.find(u => u.email === email);
+                const usuario = usuarios.find(u => u.email.toLowerCase() === email.toLowerCase());
                 
                 if (usuario) {
-                    // Em produção, enviar email real
                     alert('Um e-mail de recuperação foi enviado para ' + email);
                     registrarAcesso(email, 'recuperar_senha', 'solicitado');
                 } else {
@@ -604,10 +598,53 @@
             window.location.href = 'cadastro-fornecedor.html';
         }
 
-        // Carregar email salvo
+        // Verificar se já está logado
+        function verificarSessaoExistente() {
+            const sessao = sessionStorage.getItem('sessao_ativa');
+            if (sessao) {
+                try {
+                    const sessaoObj = JSON.parse(sessao);
+                    console.log('🔍 Sessão existente encontrada:', sessaoObj.nome);
+                    
+                    // Verificar se não expirou (30 minutos)
+                    const inicio = new Date(sessaoObj.inicio);
+                    const agora = new Date();
+                    const minutos = (agora - inicio) / 60000;
+                    
+                    if (minutos < 30) {
+                        console.log('✅ Sessão válida, redirecionando...');
+                        
+                        if (sessaoObj.tipo === 'admin' || sessaoObj.tipo === 'comprador') {
+                            window.location.href = 'sistema-gestao-corrigido2.html';
+                        } else if (sessaoObj.tipo === 'fornecedor') {
+                            window.location.href = 'dashboard-fornecedor.html';
+                        }
+                        return true;
+                    } else {
+                        console.log('⏰ Sessão expirada, limpando...');
+                        sessionStorage.removeItem('sessao_ativa');
+                    }
+                } catch (error) {
+                    console.error('💥 Erro ao verificar sessão:', error);
+                    sessionStorage.removeItem('sessao_ativa');
+                }
+            }
+            return false;
+        }
+
+        // Inicialização
         window.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Sistema de login carregado');
+            
+            // Verificar se já está logado
+            if (verificarSessaoExistente()) {
+                return;
+            }
+            
+            // Inicializar usuários
             inicializarUsuarios();
             
+            // Carregar email salvo
             const emailSalvo = localStorage.getItem('email_salvo');
             if (emailSalvo) {
                 document.getElementById('email').value = emailSalvo;
@@ -616,20 +653,17 @@
             } else {
                 document.getElementById('email').focus();
             }
+            
+            // Mostrar credenciais disponíveis
+            setTimeout(() => {
+                mostrarAlerta('info', 'Credenciais de teste: admin@sistema.com / admin123');
+            }, 1000);
         });
 
         // Prevenir voltar após login
         window.addEventListener('pageshow', function(event) {
             if (event.persisted) {
-                const sessao = sessionStorage.getItem('sessao_ativa');
-                if (sessao) {
-                    const sessaoObj = JSON.parse(sessao);
-                    if (sessaoObj.tipo === 'admin') {
-                        window.location.href = 'sistema-gestao-corrigido2.html';
-                    } else if (sessaoObj.tipo === 'fornecedor') {
-                        window.location.href = 'dashboard-fornecedor.html';
-                    }
-                }
+                verificarSessaoExistente();
             }
         });
     </script>
