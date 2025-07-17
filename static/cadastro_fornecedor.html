@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro de Fornecedor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            width: 100%;
+            max-width: 600px;
+            padding: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #7f8c8d;
+            font-size: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .required {
+            color: #e74c3c;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #ecf0f1;
+            color: #2c3e50;
+        }
+
+        .btn-secondary:hover {
+            background: #d5dbdb;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .section-divider {
+            text-align: center;
+            margin: 30px 0;
+            position: relative;
+        }
+
+        .section-divider::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            width: 100%;
+            height: 1px;
+            background: #e0e0e0;
+        }
+
+        .section-divider span {
+            background: white;
+            padding: 0 15px;
+            position: relative;
+            color: #7f8c8d;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                padding: 30px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏢 Cadastro de Fornecedor</h1>
+            <p>Preencha os dados para criar sua conta</p>
+        </div>
+
+        <div id="alertBox" class="alert"></div>
+
+        <form id="formCadastroFornecedor" onsubmit="cadastrarFornecedor(event)">
+            <div class="section-divider">
+                <span>DADOS DA EMPRESA</span>
+            </div>
+
+            <div class="form-group">
+                <label for="razaoSocial">Razão Social <span class="required">*</span></label>
+                <input type="text" id="razaoSocial" required placeholder="Nome completo da empresa">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="cnpj">CNPJ <span class="required">*</span></label>
+                    <input type="text" id="cnpj" required placeholder="00.000.000/0000-00" maxlength="18" onkeyup="formatarCNPJ(this)">
+                </div>
+                <div class="form-group">
+                    <label for="telefone">Telefone <span class="required">*</span></label>
+                    <input type="tel" id="telefone" required placeholder="(00) 00000-0000" maxlength="15" onkeyup="formatarTelefone(this)">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="endereco">Endereço Completo <span class="required">*</span></label>
+                <input type="text" id="endereco" required placeholder="Rua, número, bairro">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="cidade">Cidade <span class="required">*</span></label>
+                    <input type="text" id="cidade" required placeholder="Cidade">
+                </div>
+                <div class="form-group">
+                    <label for="estado">Estado <span class="required">*</span></label>
+                    <select id="estado" required>
+                        <option value="">Selecione...</option>
+                        <option value="AC">AC</option>
+                        <option value="AL">AL</option>
+                        <option value="AP">AP</option>
+                        <option value="AM">AM</option>
+                        <option value="BA">BA</option>
+                        <option value="CE">CE</option>
+                        <option value="DF">DF</option>
+                        <option value="ES">ES</option>
+                        <option value="GO">GO</option>
+                        <option value="MA">MA</option>
+                        <option value="MT">MT</option>
+                        <option value="MS">MS</option>
+                        <option value="MG">MG</option>
+                        <option value="PA">PA</option>
+                        <option value="PB">PB</option>
+                        <option value="PR">PR</option>
+                        <option value="PE">PE</option>
+                        <option value="PI">PI</option>
+                        <option value="RJ">RJ</option>
+                        <option value="RN">RN</option>
+                        <option value="RS">RS</option>
+                        <option value="RO">RO</option>
+                        <option value="RR">RR</option>
+                        <option value="SC">SC</option>
+                        <option value="SP">SP</option>
+                        <option value="SE">SE</option>
+                        <option value="TO">TO</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="section-divider">
+                <span>DADOS DO RESPONSÁVEL</span>
+            </div>
+
+            <div class="form-group">
+                <label for="nomeResponsavel">Nome do Responsável <span class="required">*</span></label>
+                <input type="text" id="nomeResponsavel" required placeholder="Nome completo">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="cpfResponsavel">CPF do Responsável <span class="required">*</span></label>
+                    <input type="text" id="cpfResponsavel" required placeholder="000.000.000-00" maxlength="14" onkeyup="formatarCPF(this)">
+                </div>
+                <div class="form-group">
+                    <label for="cargoResponsavel">Cargo <span class="required">*</span></label>
+                    <input type="text" id="cargoResponsavel" required placeholder="Ex: Diretor Comercial">
+                </div>
+            </div>
+
+            <div class="section-divider">
+                <span>DADOS DE ACESSO</span>
+            </div>
+
+            <div class="form-group">
+                <label for="email">E-mail <span class="required">*</span></label>
+                <input type="email" id="email" required placeholder="email@empresa.com">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="senha">Senha <span class="required">*</span></label>
+                    <input type="password" id="senha" required placeholder="Mínimo 8 caracteres" minlength="8">
+                </div>
+                <div class="form-group">
+                    <label for="confirmarSenha">Confirmar Senha <span class="required">*</span></label>
+                    <input type="password" id="confirmarSenha" required placeholder="Digite a senha novamente">
+                </div>
+            </div>
+
+            <div style="margin-top: 30px;">
+                <button type="submit" class="btn btn-primary">
+                    Cadastrar Fornecedor
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="window.location.href='index.html'">
+                    Voltar ao Login
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // Formatação de CNPJ
+        function formatarCNPJ(input) {
+            let valor = input.value.replace(/\D/g, '');
+            
+            if (valor.length <= 14) {
+                valor = valor.replace(/^(\d{2})(\d)/, '$1.$2');
+                valor = valor.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+                valor = valor.replace(/\.(\d{3})(\d)/, '.$1/$2');
+                valor = valor.replace(/(\d{4})(\d)/, '$1-$2');
+            }
+            
+            input.value = valor;
+        }
+
+        // Formatação de Telefone
+        function formatarTelefone(input) {
+            let valor = input.value.replace(/\D/g, '');
+            
+            if (valor.length <= 11) {
+                valor = valor.replace(/^(\d{2})(\d)/, '($1) $2');
+                valor = valor.replace(/(\d{5})(\d)/, '$1-$2');
+            }
+            
+            input.value = valor;
+        }
+
+        // Formatação de CPF
+        function formatarCPF(input) {
+            let valor = input.value.replace(/\D/g, '');
+            
+            if (valor.length <= 11) {
+                valor = valor.replace(/^(\d{3})(\d)/, '$1.$2');
+                valor = valor.replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3');
+                valor = valor.replace(/\.(\d{3})(\d)/, '.$1-$2');
+            }
+            
+            input.value = valor;
+        }
+
+        // Cadastrar fornecedor
+        function cadastrarFornecedor(event) {
+            event.preventDefault();
+            
+            // Validações
+            const senha = document.getElementById('senha').value;
+            const confirmarSenha = document.getElementById('confirmarSenha').value;
+            
+            if (senha !== confirmarSenha) {
+                mostrarAlerta('As senhas não coincidem!', 'error');
+                return;
+            }
+            
+            // Coletar dados
+            const dadosFornecedor = {
+                id: 'forn_' + Date.now(),
+                tipo: 'fornecedor',
+                razaoSocial: document.getElementById('razaoSocial').value,
+                cnpj: document.getElementById('cnpj').value.replace(/\D/g, ''),
+                telefone: document.getElementById('telefone').value,
+                endereco: document.getElementById('endereco').value,
+                cidade: document.getElementById('cidade').value,
+                estado: document.getElementById('estado').value,
+                nomeResponsavel: document.getElementById('nomeResponsavel').value,
+                cpfResponsavel: document.getElementById('cpfResponsavel').value.replace(/\D/g, ''),
+                cargoResponsavel: document.getElementById('cargoResponsavel').value,
+                email: document.getElementById('email').value,
+                senha: btoa(senha), // Em produção, usar hash real
+                ativo: true,
+                dataCriacao: new Date().toISOString()
+            };
+            
+            // Verificar se e-mail já existe
+            const usuarios = JSON.parse(localStorage.getItem('usuarios_sistema') || '[]');
+            
+            if (usuarios.some(u => u.email === dadosFornecedor.email)) {
+                mostrarAlerta('Este e-mail já está cadastrado!', 'error');
+                return;
+            }
+            
+            // Verificar se CNPJ já existe
+            if (usuarios.some(u => u.cnpj === dadosFornecedor.cnpj)) {
+                mostrarAlerta('Este CNPJ já está cadastrado!', 'error');
+                return;
+            }
+            
+            // Salvar fornecedor
+            usuarios.push(dadosFornecedor);
+            localStorage.setItem('usuarios_sistema', JSON.stringify(usuarios));
+            
+            mostrarAlerta('Fornecedor cadastrado com sucesso! Redirecionando...', 'success');
+            
+            // Redirecionar após 2 segundos
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 2000);
+        }
+
+        // Mostrar alerta
+        function mostrarAlerta(mensagem, tipo) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.className = `alert alert-${tipo}`;
+            alertBox.textContent = mensagem;
+            alertBox.style.display = 'block';
+            
+            // Esconder após 5 segundos
+            setTimeout(() => {
+                alertBox.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
