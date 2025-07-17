@@ -1,360 +1,247 @@
 // ========================================
-// SISTEMA DE AUTENTICAÇÃO - ATUALIZADO PARA MULTI-COMPRADOR
-// Arquivo: auth.js
+// SISTEMA DE AUTENTICAÇÃO - CORRIGIDO
 // ========================================
 
-// Salve este arquivo como auth.js e inclua em todas as páginas protegidas:
-// <script src="auth.js"></script>
-
 const Auth = {
+    // Configurações
+    config: {
+        tokenKey: 'auth_token',
+        userKey: 'user_data',
+        sessionTimeout: 24 * 60 * 60 * 1000 // 24 horas
+    },
+
     // Verificar se usuário está autenticado
-    verificarAutenticacao: function(tipoRequerido = null) {
-        const sessao = sessionStorage.getItem('sessao_ativa');
-        
-        if (!sessao) {
-            // Não autenticado
-            window.location.href = 'login.html';
-            return false;
-        }
-        
+    verificarAutenticacao: function(tiposPermitidos = []) {
         try {
-            const sessaoObj = JSON.parse(sessao);
+            const token = localStorage.getItem(this.config.tokenKey);
+            const userData = localStorage.getItem(this.config.userKey);
             
-            // Verificar expiração (30 minutos)
-            const inicio = new Date(sessaoObj.inicio);
-            const agora = new Date();
-            const minutos = (agora - inicio) / 60000;
-            
-            if (minutos > 30) {
-                // Sessão expirada
-                this.logout('Sessão expirada. Faça login novamente.');
-                return false;
+            if (!token || !userData) {
+                this.redirecionarLogin();
+                return null;
             }
             
-            // Verificar tipo de usuário se especificado
-            if (tipoRequerido) {
-                // Admin pode acessar tudo
-                if (sessaoObj.tipo === 'admin') {
-                    return sessaoObj;
-                }
-                
-                // Verificar se o tipo corresponde
-                if (Array.isArray(tipoRequerido)) {
-                    if (!tipoRequerido.includes(sessaoObj.tipo)) {
-                        alert('Você não tem permissão para acessar esta área.');
-                        this.redirecionarPorTipo(sessaoObj.tipo);
-                        return false;
-                    }
-                } else if (sessaoObj.tipo !== tipoRequerido) {
-                    alert('Você não tem permissão para acessar esta área.');
-                    this.redirecionarPorTipo(sessaoObj.tipo);
-                    return false;
+            const usuario = JSON.parse(userData);
+            
+            // Verificar se o tipo de usuário é permitido
+            if (tiposPermitidos.length > 0) {
+                const tiposArray = Array.isArray(tiposPermitidos) ? tiposPermitidos : [tiposPermitidos];
+                if (!tiposArray.includes(usuario.tipo)) {
+                    alert('Acesso negado. Você não tem permissão para acessar esta página.');
+                    this.logout();
+                    return null;
                 }
             }
             
-            // Atualizar última atividade
-            sessaoObj.ultimaAtividade = new Date().toISOString();
-            sessionStorage.setItem('sessao_ativa', JSON.stringify(sessaoObj));
-            
-            return sessaoObj;
-            
+            return usuario;
         } catch (error) {
-            console.error('Erro ao verificar sessão:', error);
+            console.error('Erro na verificação de autenticação:', error);
             this.logout();
-            return false;
+            return null;
         }
     },
-    
-    // Obter dados do usuário atual
-    getUsuarioAtual: function() {
-        const sessao = sessionStorage.getItem('sessao_ativa');
-        if (sessao) {
-            return JSON.parse(sessao);
-        }
-        return null;
-    },
-    
-    // Fazer logout
-    logout: function(mensagem = null) {
-        const usuario = this.getUsuarioAtual();
-        
-        if (usuario) {
-            // Registrar logout
-            this.registrarLog(usuario.usuarioId, 'logout', 'sucesso');
-        }
-        
-        // Limpar sessão
-        sessionStorage.removeItem('sessao_ativa');
-        
-        // Redirecionar para login
-        if (mensagem) {
-            alert(mensagem);
-        }
-        
-        window.location.href = 'login.html';
-    },
-    
-    // Redirecionar baseado no tipo de usuário
-    redirecionarPorTipo: function(tipo) {
-        switch(tipo) {
-            case 'admin':
-                window.location.href = 'sistema-gestao-corrigido2.html';
-                break;
-            case 'comprador':
-                window.location.href = 'sistema-gestao-corrigido2.html';
-                break;
-            case 'fornecedor':
-                window.location.href = 'dashboard-fornecedor.html';
-                break;
-            case 'auditor':
-                window.location.href = 'dashboard-auditor.html';
-                break;
-            default:
-                window.location.href = 'login.html';
-        }
-    },
-    
-    // Registrar log de atividade
-    registrarLog: function(usuarioId, acao, detalhes) {
-        const logs = JSON.parse(localStorage.getItem('logs_atividade') || '[]');
-        
-        logs.push({
-            usuarioId: usuarioId,
-            acao: acao,
-            detalhes: detalhes,
-            timestamp: new Date().toISOString(),
-            pagina: window.location.pathname
-        });
-        
-        // Manter apenas últimos 5000 logs
-        if (logs.length > 5000) {
-            logs.shift();
-        }
-        
-        localStorage.setItem('logs_atividade', JSON.stringify(logs));
-    },
-    
-    // Adicionar informações do usuário ao header
-    exibirInfoUsuario: function(elementId = 'infoUsuario') {
-        const usuario = this.getUsuarioAtual();
-        const elemento = document.getElementById(elementId);
-        
-        if (usuario && elemento) {
-            let tipoExibicao = usuario.tipo;
-            if (usuario.tipo === 'comprador') {
-                tipoExibicao = usuario.nivelAcesso || 'Comprador';
-                tipoExibicao = tipoExibicao.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-            }
+
+    // Realizar login
+    login: async function(email, senha) {
+        try {
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, senha })
+            });
             
-            elemento.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <span style="color: #fff; opacity: 0.8;">Olá,</span>
-                    <strong style="color: #fff;">${usuario.nome}</strong>
-                    <span style="color: #fff; opacity: 0.8;">|</span>
-                    <span style="color: #fff; font-size: 12px; opacity: 0.8;">${tipoExibicao}</span>
-                    <span style="color: #fff; opacity: 0.8;">|</span>
-                    <button onclick="Auth.logout()" style="background: rgba(255,255,255,0.2); border: none; color: #fff; cursor: pointer; font-weight: 600; padding: 5px 15px; border-radius: 5px; transition: all 0.3s;">
-                        🚪 Sair
-                    </button>
-                </div>
-            `;
+            const data = await response.json();
+            
+            if (data.sucesso) {
+                // Salvar dados do usuário
+                localStorage.setItem(this.config.tokenKey, data.token);
+                localStorage.setItem(this.config.userKey, JSON.stringify(data.usuario));
+                
+                return { sucesso: true, usuario: data.usuario };
+            } else {
+                return { sucesso: false, erro: data.erro };
+            }
+        } catch (error) {
+            console.error('Erro no login:', error);
+            return { sucesso: false, erro: 'Erro de conexão com o servidor' };
         }
     },
-    
-    // Verificar permissões específicas
+
+    // Realizar logout - CORRIGIDO
+    logout: function() {
+        try {
+            // Limpar dados do localStorage
+            localStorage.removeItem(this.config.tokenKey);
+            localStorage.removeItem(this.config.userKey);
+            
+            // Fazer chamada para o backend para invalidar sessão
+            fetch('/api/logout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }).catch(error => {
+                console.warn('Erro ao notificar logout no servidor:', error);
+            });
+            
+            // Redirecionar para página de login
+            this.redirecionarLogin();
+        } catch (error) {
+            console.error('Erro no logout:', error);
+            // Mesmo com erro, redirecionar para login
+            this.redirecionarLogin();
+        }
+    },
+
+    // Redirecionar para login
+    redirecionarLogin: function() {
+        // Verificar se já está na página de login para evitar loop
+        if (!window.location.pathname.includes('login') && !window.location.pathname.includes('index.html')) {
+            window.location.href = 'index.html';
+        }
+    },
+
+    // Exibir informações do usuário - CORRIGIDO
+    exibirInfoUsuario: function(elementId = 'infoUsuario') {
+        try {
+            const userData = localStorage.getItem(this.config.userKey);
+            if (!userData) return;
+            
+            const usuario = JSON.parse(userData);
+            const elemento = document.getElementById(elementId);
+            
+            if (elemento) {
+                elemento.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <span style="color: white; font-weight: 600;">
+                            Olá, ${usuario.nome || usuario.email}
+                        </span>
+                        <span style="background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 12px; font-size: 12px;">
+                            ${this.getTipoUsuarioLabel(usuario.tipo)}
+                        </span>
+                        <button onclick="Auth.logout()" style="
+                            background: rgba(255,255,255,0.2); 
+                            color: white; 
+                            border: none; 
+                            padding: 8px 15px; 
+                            border-radius: 6px; 
+                            cursor: pointer;
+                            font-weight: 600;
+                            transition: background 0.3s;
+                        " onmouseover="this.style.background='rgba(255,255,255,0.3)'" 
+                           onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                            🚪 Sair
+                        </button>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Erro ao exibir info do usuário:', error);
+        }
+    },
+
+    // Obter label do tipo de usuário
+    getTipoUsuarioLabel: function(tipo) {
+        const labels = {
+            'admin': 'Administrador',
+            'comprador': 'Comprador',
+            'fornecedor': 'Fornecedor'
+        };
+        return labels[tipo] || tipo;
+    },
+
+    // Filtrar dados por permissão
+    filtrarDadosPorPermissao: function(dados, tipo) {
+        const usuario = this.getUsuarioAtual();
+        if (!usuario) return [];
+        
+        // Admin vê tudo
+        if (usuario.tipo === 'admin') {
+            return dados;
+        }
+        
+        // Comprador vê apenas seus próprios dados
+        if (usuario.tipo === 'comprador') {
+            return dados.filter(item => item.criadoPor === usuario.id);
+        }
+        
+        // Fornecedor vê apenas dados públicos
+        return dados.filter(item => item.publico === true);
+    },
+
+    // Obter usuário atual
+    getUsuarioAtual: function() {
+        try {
+            const userData = localStorage.getItem(this.config.userKey);
+            return userData ? JSON.parse(userData) : null;
+        } catch (error) {
+            console.error('Erro ao obter usuário atual:', error);
+            return null;
+        }
+    },
+
+    // Verificar se tem permissão específica
     temPermissao: function(permissao) {
         const usuario = this.getUsuarioAtual();
         if (!usuario) return false;
         
         const permissoes = {
-            admin: [
-                'criar_processo',
-                'editar_processo',
-                'deletar_processo',
-                'ver_todos_processos',
-                'ver_todas_propostas',
-                'gerar_relatorios',
-                'gerenciar_usuarios',
-                'criar_compradores'
-            ],
-            comprador: [
-                'criar_processo',
-                'editar_proprio_processo',
-                'deletar_proprio_processo',
-                'ver_proprios_processos',
-                'ver_propostas_proprios_processos',
-                'gerar_relatorios_proprios_processos'
-            ],
-            comprador_senior: [
-                'criar_processo',
-                'editar_proprio_processo',
-                'deletar_proprio_processo',
-                'ver_todos_processos',
-                'ver_propostas_proprios_processos',
-                'gerar_relatorios'
-            ],
-            gerente: [
-                'criar_processo',
-                'editar_processo',
-                'aprovar_processo',
-                'ver_todos_processos',
-                'ver_todas_propostas',
-                'gerar_relatorios'
-            ],
-            fornecedor: [
-                'ver_processos_ativos',
-                'enviar_proposta',
-                'ver_proprias_propostas',
-                'editar_propria_proposta'
-            ],
-            auditor: [
-                'ver_todos_processos',
-                'ver_todas_propostas',
-                'gerar_relatorios'
-            ]
+            'admin': ['criar_processo', 'editar_processo', 'deletar_processo', 'ver_todas_propostas', 'cadastrar_comprador'],
+            'comprador': ['criar_processo', 'editar_processo', 'ver_propostas_processo'],
+            'fornecedor': ['enviar_proposta', 'ver_propria_proposta']
         };
         
-        // Para compradores, usar o nível de acesso específico
-        let tipoPermissao = usuario.tipo;
-        if (usuario.tipo === 'comprador' && usuario.nivelAcesso) {
-            tipoPermissao = usuario.nivelAcesso;
-        }
-        
-        const permissoesUsuario = permissoes[tipoPermissao] || [];
-        return permissoesUsuario.includes(permissao);
+        return permissoes[usuario.tipo]?.includes(permissao) || false;
     },
-    
-    // Filtrar dados baseado no tipo de usuário
-    filtrarDadosPorPermissao: function(dados, tipo) {
-        const usuario = this.getUsuarioAtual();
-        if (!usuario) return [];
-        
-        switch(tipo) {
-            case 'processos':
-                // Admin e gerente veem todos
-                if (usuario.tipo === 'admin' || usuario.nivelAcesso === 'gerente' || usuario.nivelAcesso === 'comprador_senior') {
-                    return dados;
-                }
-                
-                // Comprador vê apenas seus processos
-                if (usuario.tipo === 'comprador') {
-                    return dados.filter(p => p.criadoPor === usuario.usuarioId);
-                }
-                
-                // Fornecedor só vê processos ativos
-                if (usuario.tipo === 'fornecedor') {
-                    const agora = new Date();
-                    return dados.filter(p => new Date(p.prazo) > agora);
-                }
-                
-                return dados;
-                
-            case 'propostas':
-                // Admin, gerente e auditor veem todas
-                if (usuario.tipo === 'admin' || usuario.nivelAcesso === 'gerente' || usuario.tipo === 'auditor') {
-                    return dados;
-                }
-                
-                // Comprador vê apenas propostas dos seus processos
-                if (usuario.tipo === 'comprador') {
-                    // Primeiro, pegar os processos do comprador
-                    const processos = JSON.parse(localStorage.getItem('processos') || '[]');
-                    const meusProcessos = processos
-                        .filter(p => p.criadoPor === usuario.usuarioId)
-                        .map(p => p.numero);
-                    
-                    // Filtrar propostas
-                    return dados.filter(proposta => meusProcessos.includes(proposta.processo));
-                }
-                
-                // Fornecedor só vê suas próprias propostas
-                if (usuario.tipo === 'fornecedor') {
-                    return dados.filter(p => p.cnpj === usuario.cnpj);
-                }
-                
-                return dados;
-                
-            default:
-                return dados;
-        }
-    },
-    
-    // Verificar se pode editar processo
-    podeEditarProcesso: function(processo) {
-        const usuario = this.getUsuarioAtual();
-        if (!usuario) return false;
-        
-        // Admin e gerente podem editar qualquer processo
-        if (usuario.tipo === 'admin' || usuario.nivelAcesso === 'gerente') {
-            return true;
-        }
-        
-        // Comprador só pode editar seus próprios processos
-        if (usuario.tipo === 'comprador' && processo.criadoPor === usuario.usuarioId) {
-            return true;
-        }
-        
-        return false;
-    },
-    
-    // Proteger elementos da página baseado em permissões
-    protegerElementos: function() {
-        const usuario = this.getUsuarioAtual();
-        if (!usuario) return;
-        
-        // Esconder elementos baseado em data-permissao
-        document.querySelectorAll('[data-permissao]').forEach(elemento => {
-            const permissaoRequerida = elemento.getAttribute('data-permissao');
-            if (!this.temPermissao(permissaoRequerida)) {
-                elemento.style.display = 'none';
-            }
-        });
-        
-        // Desabilitar inputs se usuário for auditor
-        if (usuario.tipo === 'auditor') {
-            document.querySelectorAll('input, textarea, select, button[type="submit"]').forEach(elemento => {
-                elemento.disabled = true;
+
+    // Cadastrar fornecedor
+    cadastrarFornecedor: async function(dadosFornecedor) {
+        try {
+            const response = await fetch('/api/cadastrar-fornecedor', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dadosFornecedor)
             });
+            
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Erro ao cadastrar fornecedor:', error);
+            return { sucesso: false, erro: 'Erro de conexão com o servidor' };
         }
-        
-        // Para compradores, mostrar apenas seus processos
-        if (usuario.tipo === 'comprador' && usuario.nivelAcesso !== 'comprador_senior' && usuario.nivelAcesso !== 'gerente') {
-            // Esta lógica será implementada em cada página específica
+    },
+
+    // Cadastrar comprador
+    cadastrarComprador: async function(dadosComprador) {
+        try {
+            const response = await fetch('/api/cadastrar-comprador', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dadosComprador)
+            });
+            
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Erro ao cadastrar comprador:', error);
+            return { sucesso: false, erro: 'Erro de conexão com o servidor' };
         }
     }
 };
 
-// ========================================
-// COMO USAR ESTE SISTEMA ATUALIZADO
-// ========================================
-
-// 1. Para páginas que admin e compradores podem acessar:
-/*
-window.addEventListener('DOMContentLoaded', function() {
-    const usuario = Auth.verificarAutenticacao(['admin', 'comprador']);
-    if (usuario) {
-        Auth.exibirInfoUsuario();
-        Auth.protegerElementos();
-        
-        // Filtrar dados baseado no usuário
-        const processos = Auth.filtrarDadosPorPermissao(todosProcessos, 'processos');
-        const propostas = Auth.filtrarDadosPorPermissao(todasPropostas, 'propostas');
+// Verificar autenticação automaticamente quando a página carrega
+document.addEventListener('DOMContentLoaded', function() {
+    // Só verificar se não estiver na página de login
+    if (!window.location.pathname.includes('login') && !window.location.pathname.includes('index.html')) {
+        Auth.verificarAutenticacao();
     }
 });
-*/
 
-// 2. Para verificar se pode editar um processo:
-/*
-if (Auth.podeEditarProcesso(processo)) {
-    // Mostrar botões de edição
-}
-*/
-
-// 3. Para criar processo com rastreamento de proprietário:
-/*
-const novoProcesso = {
-    // ... outros campos ...
-    criadoPor: usuario.usuarioId,
-    criadoEm: new Date().toISOString()
-};
-*/
+// Exportar para uso global
+window.Auth = Auth;
