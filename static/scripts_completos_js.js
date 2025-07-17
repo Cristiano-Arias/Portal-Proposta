@@ -1,529 +1,630 @@
 // ========================================
-// SCRIPTS COMPLETOS PARA O SISTEMA DE PROPOSTAS
+// SCRIPTS COMPLETOS PARA O SISTEMA DE PROPOSTAS - CORRIGIDOS
 // ========================================
 
 // ===== CONFIGURAÇÕES GLOBAIS =====
 const CONFIG = {
-    backendUrl: window.location.origin, // Usa a mesma URL do frontend
+    backendUrl: window.location.origin,
     endpoints: {
         enviarProposta: '/api/enviar-proposta',
         verificarCnpj: '/api/verificar-cnpj',
         listarPropostas: '/api/propostas/listar',
-        status: '/api/status'
+        status: '/api/status',
+        cadastrarFornecedor: '/api/cadastrar-fornecedor',
+        cadastrarComprador: '/api/cadastrar-comprador',
+        login: '/api/login',
+        logout: '/api/logout'
     }
 };
 
-// ===== FUNÇÕES DE CÁLCULO DE VALORES =====
+// ===== CRONOGRAMA AUTOMÁTICO - IMPLEMENTAÇÃO COMPLETA =====
 
-// Função para calcular totais comerciais CORRIGIDA
-function calcularTotais() {
-    // Pegar valores dos campos
-    const totalServicosInput = document.getElementById('totalServicos');
-    const totalMaoObraInput = document.getElementById('totalMaoObra');
-    const totalMateriaisInput = document.getElementById('totalMateriais');
-    const totalEquipamentosInput = document.getElementById('totalEquipamentos');
-    const bdiPercentualInput = document.getElementById('bdiPercentual');
-    const bdiValorInput = document.getElementById('bdiValor');
-    const valorTotalInput = document.getElementById('valorTotal');
-    const custoDirectoInput = document.getElementById('custoDirecto');
-    
-    // Converter valores para número
-    const totalServicos = parseFloat(totalServicosInput?.value.replace(/\./g, '').replace(',', '.')) || 0;
-    const maoObra = parseFloat(totalMaoObraInput?.value.replace(/\./g, '').replace(',', '.')) || 0;
-    const materiais = parseFloat(totalMateriaisInput?.value.replace(/\./g, '').replace(',', '.')) || 0;
-    const equipamentos = parseFloat(totalEquipamentosInput?.value.replace(/\./g, '').replace(',', '.')) || 0;
-    const bdiPercentual = parseFloat(bdiPercentualInput?.value.replace(',', '.')) || 0;
-    
-    // IMPORTANTE: Custo Direto = APENAS (MO + Mat + Equip)
-    const custoDireto = maoObra + materiais + equipamentos;
-    
-    // Calcular BDI sobre o custo direto
-    const bdiValor = custoDireto * (bdiPercentual / 100);
-    
-    // Valor Total = Custo Direto + BDI
-    const valorTotal = custoDireto + bdiValor;
-    
-    // Atualizar campos calculados
-    if (custoDirectoInput) {
-        custoDirectoInput.value = formatarMoeda(custoDireto);
-    }
-    
-    if (bdiValorInput) {
-        bdiValorInput.value = formatarMoeda(bdiValor);
-    }
-    
-    if (valorTotalInput) {
-        valorTotalInput.value = formatarMoeda(valorTotal);
-    }
-}
-
-// Função auxiliar para formatar valores monetários
-function formatarMoeda(valor) {
-    return valor.toLocaleString('pt-BR', { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
-    });
-}
-
-// ===== CRONOGRAMA AUTOMÁTICO =====
-
-// Função para adicionar linha no cronograma com cálculo automático
+/**
+ * Adiciona uma nova linha ao cronograma com cálculo automático
+ */
 function addCronogramaRow() {
     const tbody = document.querySelector('#cronogramaTable tbody');
-    const rowCount = tbody.rows.length;
+    if (!tbody) return;
+    
     const newRow = tbody.insertRow();
+    const rowCount = tbody.rows.length;
     
     newRow.innerHTML = `
-        <td><input type="text" placeholder="Atividade ${rowCount + 1}"></td>
-        <td><input type="number" placeholder="30" class="duracao-input" min="1" onchange="calcularCronograma()"></td>
-        <td><input type="text" placeholder="Calculado automaticamente" readonly></td>
-        <td><input type="text" placeholder="Calculado automaticamente" readonly></td>
-        <td><button type="button" class="remove-btn" onclick="removeRowAndRecalculate(this)">×</button></td>
+        <td><input type="text" placeholder="Atividade ${rowCount}" class="atividade-input"></td>
+        <td><input type="number" placeholder="10" min="1" class="duracao-input" onchange="calcularCronograma()"></td>
+        <td><input type="text" readonly class="inicio-calculado" style="background: #f8f9fa;"></td>
+        <td><input type="text" readonly class="fim-calculado" style="background: #f8f9fa;"></td>
+        <td><button type="button" class="remove-btn" onclick="removeRowAndRecalculate(this, 'cronograma')">×</button></td>
     `;
     
+    // Recalcular cronograma após adicionar linha
     calcularCronograma();
 }
 
-// Remove linha e recalcula
-function removeRowAndRecalculate(button) {
+/**
+ * Remove linha e recalcula cronograma
+ */
+function removeRowAndRecalculate(button, type) {
     const row = button.closest('tr');
     row.remove();
-    calcularCronograma();
+    
+    if (type === 'cronograma') {
+        calcularCronograma();
+    } else {
+        calcularTotais();
+    }
 }
 
-// Função principal para calcular cronograma automaticamente
+/**
+ * Função principal para calcular cronograma automaticamente
+ * Calcula datas de início e fim baseado apenas na duração em dias
+ */
 function calcularCronograma() {
     const tbody = document.querySelector('#cronogramaTable tbody');
+    if (!tbody) return;
+    
     const rows = tbody.rows;
     let diaAtual = 1;
+    let prazoTotalDias = 0;
     
+    // Percorrer todas as linhas do cronograma
     for (let i = 0; i < rows.length; i++) {
-        const duracaoInput = rows[i].cells[1].querySelector('input');
-        const inicioInput = rows[i].cells[2].querySelector('input');
-        const fimInput = rows[i].cells[3].querySelector('input');
+        const row = rows[i];
+        const duracaoInput = row.querySelector('.duracao-input');
+        const inicioInput = row.querySelector('.inicio-calculado');
+        const fimInput = row.querySelector('.fim-calculado');
+        
+        if (!duracaoInput || !inicioInput || !fimInput) continue;
         
         const duracao = parseInt(duracaoInput.value) || 0;
         
         if (duracao > 0) {
             const diaFim = diaAtual + duracao - 1;
             
+            // Atualizar campos calculados
             inicioInput.value = `Dia ${diaAtual}`;
             fimInput.value = `Dia ${diaFim}`;
             
+            // Próxima atividade começa no dia seguinte ao fim da atual
             diaAtual = diaFim + 1;
+            prazoTotalDias += duracao;
         } else {
+            // Limpar campos se duração for inválida
             inicioInput.value = '';
             fimInput.value = '';
         }
     }
     
-    atualizarPrazoTotal();
-}
-
-// Atualiza o prazo total baseado no cronograma
-function atualizarPrazoTotal() {
-    const tbody = document.querySelector('#cronogramaTable tbody');
-    const rows = tbody.rows;
-    let prazoTotal = 0;
-    
-    for (let i = 0; i < rows.length; i++) {
-        const duracaoInput = rows[i].cells[1].querySelector('input');
-        const duracao = parseInt(duracaoInput.value) || 0;
-        prazoTotal += duracao;
+    // Atualizar prazo total calculado
+    const prazoTotalElement = document.getElementById('prazoTotalCronograma');
+    if (prazoTotalElement) {
+        prazoTotalElement.textContent = prazoTotalDias;
     }
     
+    // Atualizar campo principal de prazo de execução
     const prazoExecucaoInput = document.getElementById('prazoExecucao');
-    if (prazoExecucaoInput && prazoTotal > 0) {
-        prazoExecucaoInput.value = prazoTotal + ' dias';
+    if (prazoExecucaoInput) {
+        prazoExecucaoInput.value = `${prazoTotalDias} dias`;
     }
+    
+    // Disparar evento personalizado para outras partes do sistema
+    document.dispatchEvent(new CustomEvent('cronogramaAtualizado', {
+        detail: { prazoTotal: prazoTotalDias }
+    }));
 }
 
-// ===== VALIDAÇÃO CNPJ POR PROCESSO =====
-
-// Função para verificar se CNPJ já enviou proposta para este processo
-function verificarCNPJDuplicado(cnpj, processoAtual) {
-    const cnpjLimpo = cnpj.replace(/[^\d]/g, '');
-    const propostas = JSON.parse(localStorage.getItem('sistema_propostas') || '[]');
+/**
+ * Inicializa o cronograma com dados padrão se necessário
+ */
+function inicializarCronograma() {
+    const tbody = document.querySelector('#cronogramaTable tbody');
+    if (!tbody) return;
     
-    const propostaDuplicada = propostas.find(proposta => {
-        const cnpjProposta = proposta.cnpj?.replace(/[^\d]/g, '');
-        const processoProposta = proposta.processo || proposta.dadosCompletos?.processo;
+    // Se não há linhas, adicionar uma linha padrão
+    if (tbody.rows.length === 0) {
+        addCronogramaRow();
         
-        return cnpjProposta === cnpjLimpo && processoProposta === processoAtual;
-    });
-    
-    return propostaDuplicada;
-}
-
-// Validação via API
-async function verificarCNPJViaAPI(cnpj, processo) {
-    try {
-        const response = await fetch(`${CONFIG.backendUrl}${CONFIG.endpoints.verificarCnpj}`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ cnpj, processo })
-        });
-        
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        console.error('Erro ao verificar CNPJ:', error);
-        return { duplicado: false };
-    }
-}
-
-// Adicionar validação em tempo real no campo CNPJ
-function adicionarValidacaoCNPJ() {
-    const cnpjInput = document.getElementById('cnpj');
-    if (!cnpjInput) return;
-    
-    cnpjInput.addEventListener('blur', async function() {
-        const processoAtual = document.getElementById('processo')?.value || 
-                             new URLSearchParams(window.location.search).get('processo');
-        
-        if (this.value && processoAtual) {
-            // Verificar via API
-            const resultado = await verificarCNPJViaAPI(this.value, processoAtual);
+        // Preencher com dados padrão
+        const primeiraLinha = tbody.rows[0];
+        if (primeiraLinha) {
+            const atividadeInput = primeiraLinha.querySelector('.atividade-input');
+            const duracaoInput = primeiraLinha.querySelector('.duracao-input');
             
-            if (resultado.duplicado) {
-                this.style.borderColor = '#e74c3c';
-                this.style.backgroundColor = '#ffe6e6';
-                
-                let avisoElement = document.getElementById('aviso-cnpj-duplicado');
-                if (!avisoElement) {
-                    avisoElement = document.createElement('div');
-                    avisoElement.id = 'aviso-cnpj-duplicado';
-                    avisoElement.style.cssText = 'color: #e74c3c; font-size: 12px; margin-top: 5px;';
-                    this.parentElement.appendChild(avisoElement);
-                }
-                
-                avisoElement.innerHTML = `⚠️ Este CNPJ já possui proposta para este processo (Protocolo: ${resultado.protocolo})`;
+            if (atividadeInput) atividadeInput.value = 'Mobilização';
+            if (duracaoInput) duracaoInput.value = '15';
+        }
+    }
+    
+    // Calcular cronograma inicial
+    calcularCronograma();
+}
+
+// ===== FUNÇÕES DE FORMATAÇÃO E CÁLCULO =====
+
+/**
+ * Formata valor monetário para exibição
+ */
+function formatarMoeda(valor) {
+    if (!valor && valor !== 0) return '';
+    let numero = parseFloat(valor);
+    if (isNaN(numero)) return '';
+    return numero.toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}
+
+/**
+ * Converte string de moeda para número
+ */
+function parseMoeda(valor) {
+    if (typeof valor === 'number') return valor;
+    if (typeof valor === 'string') {
+        return parseFloat(valor.replace(/\./g, '').replace(',', '.').replace('R$', '').trim()) || 0;
+    }
+    return 0;
+}
+
+/**
+ * Calcula totais comerciais - CORRIGIDO CONFORME SOLICITAÇÃO
+ */
+function calcularTotais() {
+    // Calcular totais de cada categoria
+    const totalMaoObra = calcularTotalTabela('maoObraTable');
+    const totalMateriais = calcularTotalTabela('materiaisTable');
+    const totalEquipamentos = calcularTotalTabela('equipamentosTable');
+    
+    // CUSTO DIRETO = APENAS (MO + Mat + Equip) - CONFORME SOLICITAÇÃO
+    const custoDireto = totalMaoObra + totalMateriais + totalEquipamentos;
+    
+    // BDI sobre o custo direto
+    const bdiPercentualInput = document.getElementById('bdiPercentual');
+    const bdiPercentual = parseFloat(bdiPercentualInput?.value) || 0;
+    const bdiValor = custoDireto * (bdiPercentual / 100);
+    
+    // VALOR TOTAL = Custo Direto + BDI (conforme solicitação)
+    const valorTotal = custoDireto + bdiValor;
+    
+    // Atualizar campos na interface
+    atualizarCamposCalculados({
+        totalMaoObra,
+        totalMateriais,
+        totalEquipamentos,
+        custoDireto,
+        bdiPercentual,
+        bdiValor,
+        valorTotal
+    });
+}
+
+/**
+ * Atualiza campos calculados na interface
+ */
+function atualizarCamposCalculados(valores) {
+    const campos = {
+        'totalMaoObra': valores.totalMaoObra,
+        'totalMateriais': valores.totalMateriais,
+        'totalEquipamentos': valores.totalEquipamentos,
+        'custoDirecto': valores.custoDireto,
+        'bdiPercentualDisplay': valores.bdiPercentual.toFixed(1),
+        'bdiValorDisplay': valores.bdiValor,
+        'bdiValor': valores.bdiValor,
+        'valorTotalCalculado': valores.valorTotal,
+        'valorTotal': valores.valorTotal
+    };
+    
+    Object.entries(campos).forEach(([id, valor]) => {
+        const elemento = document.getElementById(id);
+        if (elemento) {
+            if (id === 'bdiPercentualDisplay') {
+                elemento.textContent = valor;
+            } else if (id === 'bdiValor' || id === 'valorTotal') {
+                elemento.value = 'R$ ' + formatarMoeda(valor);
             } else {
-                this.style.borderColor = '';
-                this.style.backgroundColor = '';
-                
-                const avisoElement = document.getElementById('aviso-cnpj-duplicado');
-                if (avisoElement) {
-                    avisoElement.remove();
-                }
+                elemento.textContent = formatarMoeda(valor);
             }
         }
     });
 }
 
-// ===== ENVIO DE PROPOSTA =====
-
-// Função para coletar todos os dados do formulário
-function coletarDados() {
-    const dados = {
-        protocolo: gerarProtocolo(),
-        processo: document.getElementById('processo')?.value || new URLSearchParams(window.location.search).get('processo'),
-        dados: {
-            razaoSocial: document.getElementById('razaoSocial').value,
-            cnpj: document.getElementById('cnpj').value,
-            endereco: document.getElementById('endereco').value,
-            cidade: document.getElementById('cidade').value,
-            telefone: document.getElementById('telefone').value,
-            email: document.getElementById('email').value,
-            respTecnico: document.getElementById('respTecnico').value,
-            crea: document.getElementById('crea').value
-        },
-        tecnica: {
-            objetoConcorrencia: document.getElementById('objetoConcorrencia').value,
-            escopoInclusos: document.getElementById('escopoInclusos').value,
-            escopoExclusos: document.getElementById('escopoExclusos').value,
-            metodologia: document.getElementById('metodologia').value,
-            sequenciaExecucao: document.getElementById('sequenciaExecucao').value,
-            prazoExecucao: document.getElementById('prazoExecucao').value,
-            prazoMobilizacao: document.getElementById('prazoMobilizacao').value,
-            garantias: document.getElementById('garantias').value,
-            estruturaCanteiro: document.getElementById('estruturaCanteiro').value,
-            obrigacoesContratada: document.getElementById('obrigacoesContratada').value,
-            obrigacoesContratante: document.getElementById('obrigacoesContratante').value,
-            condicoesPremissas: document.getElementById('condicoesPremissas').value,
-            experienciaEmpresa: document.getElementById('experienciaEmpresa').value,
-            atestadosObras: document.getElementById('atestadosObras').value,
-            observacoesFinais: document.getElementById('observacoesFinais').value,
-            cronograma: coletarCronograma(),
-            equipe: coletarEquipe(),
-            materiais: coletarMateriais(),
-            equipamentos: coletarEquipamentos()
-        },
-        comercial: {
-            totalServicos: document.getElementById('totalServicos').value,
-            totalMaoObra: document.getElementById('totalMaoObra').value,
-            totalMateriais: document.getElementById('totalMateriais').value,
-            totalEquipamentos: document.getElementById('totalEquipamentos').value,
-            bdiPercentual: document.getElementById('bdiPercentual').value,
-            validadeProposta: document.getElementById('validadeProposta').value
-        },
-        resumo: {
-            prazoExecucao: document.getElementById('prazoExecucao').value,
-            formaPagamento: document.getElementById('formaPagamento').value
-        }
-    };
+/**
+ * Calcula total de uma tabela específica
+ */
+function calcularTotalTabela(tableId) {
+    const tbody = document.querySelector(`#${tableId} tbody`);
+    if (!tbody) return 0;
     
-    return dados;
-}
-
-// Função para gerar protocolo único
-function gerarProtocolo() {
-    const data = new Date();
-    const ano = data.getFullYear();
-    const mes = String(data.getMonth() + 1).padStart(2, '0');
-    const dia = String(data.getDate()).padStart(2, '0');
-    const hora = String(data.getHours()).padStart(2, '0');
-    const minuto = String(data.getMinutes()).padStart(2, '0');
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    let total = 0;
     
-    return `PROP-${ano}${mes}${dia}-${hora}${minuto}-${random}`;
-}
-
-// Função para enviar proposta com validação
-async function enviarPropostaComValidacao() {
-    const processoAtual = document.getElementById('processo')?.value || 
-                         new URLSearchParams(window.location.search).get('processo');
-    
-    if (!processoAtual) {
-        mostrarMensagem('Por favor, selecione um processo de concorrência', 'error');
-        return;
+    for (const row of tbody.rows) {
+        const quantidadeInput = row.cells[1]?.querySelector('input');
+        const valorUnitarioInput = row.cells[2]?.querySelector('input');
+        const valorTotalInput = row.cells[3]?.querySelector('input');
+        
+        if (!quantidadeInput || !valorUnitarioInput || !valorTotalInput) continue;
+        
+        const quantidade = parseFloat(quantidadeInput.value) || 0;
+        const valorUnitario = parseMoeda(valorUnitarioInput.value);
+        const valorTotalItem = quantidade * valorUnitario;
+        
+        // Atualizar campo de valor total da linha
+        valorTotalInput.value = formatarMoeda(valorTotalItem);
+        total += valorTotalItem;
     }
     
+    return total;
+}
+
+// ===== GERENCIAMENTO DE TABELAS DINÂMICAS =====
+
+/**
+ * Adiciona nova linha a uma tabela
+ */
+function addRow(tableId) {
+    const tbody = document.querySelector(`#${tableId} tbody`);
+    if (!tbody) return;
+    
+    const newRow = tbody.insertRow();
+    
+    newRow.innerHTML = `
+        <td><input type="text" placeholder="Item" class="item-input"></td>
+        <td><input type="number" placeholder="1" min="0" step="0.01" class="quantidade-input" onchange="calcularTotais()"></td>
+        <td><input type="text" placeholder="0,00" class="valor-unitario-input" onchange="calcularTotais()"></td>
+        <td><input type="text" readonly class="valor-total-input" style="background: #f8f9fa;"></td>
+        <td><button type="button" class="remove-btn" onclick="removeRowAndRecalculate(this, 'comercial')">×</button></td>
+    `;
+    
+    // Adicionar formatação de moeda ao campo valor unitário
+    const valorUnitarioInput = newRow.querySelector('.valor-unitario-input');
+    if (valorUnitarioInput) {
+        adicionarFormatacaoMoeda(valorUnitarioInput);
+    }
+}
+
+/**
+ * Adiciona formatação de moeda a um campo
+ */
+function adicionarFormatacaoMoeda(input) {
+    input.addEventListener('blur', function() {
+        if (this.value) {
+            const valor = parseMoeda(this.value);
+            this.value = formatarMoeda(valor);
+        }
+    });
+    
+    input.addEventListener('focus', function() {
+        // Remove formatação para facilitar edição
+        const valor = parseMoeda(this.value);
+        if (valor > 0) {
+            this.value = valor.toString().replace('.', ',');
+        }
+    });
+}
+
+// ===== VALIDAÇÃO DE CNPJ =====
+
+/**
+ * Configura validação de CNPJ duplicado
+ */
+function configurarValidacaoCNPJ() {
     const cnpjInput = document.getElementById('cnpj');
-    if (!cnpjInput || !cnpjInput.value) {
-        mostrarMensagem('Por favor, informe o CNPJ', 'error');
-        return;
-    }
+    const avisoDiv = document.getElementById('aviso-cnpj-duplicado');
     
-    // Verificar duplicação via API
-    const resultado = await verificarCNPJViaAPI(cnpjInput.value, processoAtual);
+    if (!cnpjInput || !avisoDiv) return;
     
-    if (resultado.duplicado) {
-        mostrarMensagem(`
-            <strong>❌ CNPJ já cadastrado!</strong><br>
-            Este CNPJ já enviou uma proposta para este processo.<br>
-            <small>Protocolo anterior: ${resultado.protocolo}</small><br>
-            <small>Data: ${new Date(resultado.data).toLocaleString('pt-BR')}</small>
-        `, 'error');
+    cnpjInput.addEventListener('blur', async function() {
+        const cnpj = this.value.trim();
+        const processoInput = document.getElementById('numeroProcesso');
+        const processo = processoInput?.value.trim();
         
-        cnpjInput.style.borderColor = '#e74c3c';
-        cnpjInput.style.backgroundColor = '#ffe6e6';
-        cnpjInput.focus();
+        // Limpar aviso anterior
+        avisoDiv.textContent = '';
+        this.style.borderColor = '';
         
-        return;
-    }
-    
-    // Se não há duplicação, continuar com o envio
-    enviarProposta();
-}
-
-// Função principal de envio
-async function enviarProposta() {
-    const dados = coletarDados();
-    
-    mostrarMensagem('Enviando proposta...', 'info');
-    
-    try {
-        const response = await fetch(`${CONFIG.backendUrl}${CONFIG.endpoints.enviarProposta}`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(dados)
-        });
+        if (!cnpj || !processo) return;
         
-        const resultado = await response.json();
-        
-        if (resultado.sucesso) {
-            mostrarMensagem(`
-                <strong>✅ Proposta enviada com sucesso!</strong><br>
-                <strong>Protocolo:</strong> ${resultado.protocolo}<br>
-                <strong>Data/Hora:</strong> ${new Date().toLocaleString('pt-BR')}<br>
-                <small>📎 Anexos gerados: ${resultado.anexos.join(', ')}</small>
-            `, 'success');
-            
-            // Salvar no localStorage
-            const propostas = JSON.parse(localStorage.getItem('sistema_propostas') || '[]');
-            propostas.push({
-                protocolo: resultado.protocolo,
-                data: new Date().toISOString(),
-                empresa: dados.dados.razaoSocial,
-                cnpj: dados.dados.cnpj,
-                valor: dados.comercial.valorTotal,
-                processo: dados.processo,
-                dadosCompletos: dados
+        try {
+            const response = await fetch(CONFIG.endpoints.verificarCnpj, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ cnpj, processo })
             });
-            localStorage.setItem('sistema_propostas', JSON.stringify(propostas));
             
-            // Limpar formulário após 5 segundos
-            setTimeout(() => {
-                if (confirm('Deseja criar uma nova proposta?')) {
-                    localStorage.removeItem('proposta_atual');
-                    window.location.reload();
-                }
-            }, 5000);
-        } else {
-            mostrarMensagem(`<strong>❌ Erro:</strong> ${resultado.erro}`, 'error');
+            const data = await response.json();
+            
+            if (data.duplicado) {
+                avisoDiv.textContent = `⚠️ Este CNPJ já enviou uma proposta para este processo (Protocolo: ${data.protocolo}).`;
+                avisoDiv.style.color = '#e74c3c';
+                this.style.borderColor = '#e74c3c';
+            }
+        } catch (error) {
+            console.error("Erro ao verificar CNPJ:", error);
+            avisoDiv.textContent = '⚠️ Não foi possível verificar o CNPJ no momento.';
+            avisoDiv.style.color = '#f39c12';
         }
-    } catch (error) {
-        console.error('Erro ao enviar:', error);
-        mostrarMensagem('Erro ao conectar com o servidor', 'error');
-    }
+    });
 }
 
-// Função para mostrar mensagens
-function mostrarMensagem(texto, tipo) {
-    const mensagemDiv = document.getElementById('mensagem');
-    if (!mensagemDiv) return;
-    
-    mensagemDiv.className = tipo === 'error' ? 'error-message' : 
-                           tipo === 'success' ? 'success-message' : 
-                           'info-message';
-    mensagemDiv.innerHTML = texto;
-    mensagemDiv.style.display = 'block';
-    
-    if (tipo === 'success' || tipo === 'error') {
-        setTimeout(() => {
-            mensagemDiv.style.display = 'none';
-        }, 10000);
-    }
+// ===== COLETA E ENVIO DE DADOS =====
+
+/**
+ * Coleta todos os dados do formulário
+ */
+function coletarDados() {
+    return {
+        processo: document.getElementById('numeroProcesso')?.value || '',
+        objeto: document.getElementById('objetoProcesso')?.value || '',
+        dados: coletarDadosEmpresa(),
+        tecnica: coletarDadosTecnicos(),
+        comercial: coletarDadosComerciais(),
+        resumo: coletarResumo()
+    };
 }
 
-// ===== FUNÇÕES AUXILIARES DE COLETA =====
+/**
+ * Coleta dados da empresa
+ */
+function coletarDadosEmpresa() {
+    return {
+        razaoSocial: document.getElementById('razaoSocial')?.value || '',
+        cnpj: document.getElementById('cnpj')?.value || '',
+        endereco: document.getElementById('endereco')?.value || '',
+        telefone: document.getElementById('telefone')?.value || '',
+        email: document.getElementById('email')?.value || '',
+        respTecnico: document.getElementById('respTecnico')?.value || '',
+        crea: document.getElementById('crea')?.value || ''
+    };
+}
 
+/**
+ * Coleta dados técnicos
+ */
+function coletarDadosTecnicos() {
+    return {
+        objetoConcorrencia: document.getElementById('objetoConcorrencia')?.value || '',
+        escopoInclusos: document.getElementById('escopoInclusos')?.value || '',
+        escopoExclusos: document.getElementById('escopoExclusos')?.value || '',
+        metodologia: document.getElementById('metodologia')?.value || '',
+        cronograma: coletarCronograma(),
+        observacoes: document.getElementById('observacoes')?.value || ''
+    };
+}
+
+/**
+ * Coleta dados do cronograma
+ */
 function coletarCronograma() {
     const tbody = document.querySelector('#cronogramaTable tbody');
     if (!tbody) return [];
     
     const cronograma = [];
-    const rows = tbody.querySelectorAll('tr');
     
-    rows.forEach(row => {
-        const cells = row.querySelectorAll('input');
-        if (cells.length >= 4 && cells[0].value) {
-            cronograma.push([
-                cells[0].value,
-                cells[1].value,
-                cells[2].value,
-                cells[3].value
-            ]);
+    for (const row of tbody.rows) {
+        const atividade = row.querySelector('.atividade-input')?.value || '';
+        const duracao = row.querySelector('.duracao-input')?.value || '';
+        const inicio = row.querySelector('.inicio-calculado')?.value || '';
+        const fim = row.querySelector('.fim-calculado')?.value || '';
+        
+        if (atividade && duracao) {
+            cronograma.push({ atividade, duracao, inicio, fim });
         }
-    });
+    }
     
     return cronograma;
 }
 
-function coletarEquipe() {
-    const tbody = document.querySelector('#equipeTable tbody');
-    if (!tbody) return [];
-    
-    const equipe = [];
-    const rows = tbody.querySelectorAll('tr');
-    
-    rows.forEach(row => {
-        const cells = row.querySelectorAll('input');
-        if (cells.length >= 5 && cells[1].value) {
-            equipe.push([
-                cells[0].value,
-                cells[1].value,
-                cells[2].value,
-                cells[3].value,
-                cells[4].value
-            ]);
-        }
-    });
-    
-    return equipe;
+/**
+ * Coleta dados comerciais
+ */
+function coletarDadosComerciais() {
+    return {
+        maoObra: coletarTabelaComercial('maoObraTable'),
+        materiais: coletarTabelaComercial('materiaisTable'),
+        equipamentos: coletarTabelaComercial('equipamentosTable'),
+        totalMaoObra: document.getElementById('totalMaoObra')?.textContent || '0,00',
+        totalMateriais: document.getElementById('totalMateriais')?.textContent || '0,00',
+        totalEquipamentos: document.getElementById('totalEquipamentos')?.textContent || '0,00',
+        bdiPercentual: document.getElementById('bdiPercentual')?.value || '0',
+        bdiValor: document.getElementById('bdiValor')?.value || 'R$ 0,00',
+        validadeProposta: document.getElementById('validadeProposta')?.value || '60 dias',
+        validadeDetalhada: document.getElementById('validadeDetalhada')?.value || ''
+    };
 }
 
-function coletarMateriais() {
-    const tbody = document.querySelector('#materiaisTable tbody');
+/**
+ * Coleta dados de uma tabela comercial
+ */
+function coletarTabelaComercial(tableId) {
+    const tbody = document.querySelector(`#${tableId} tbody`);
     if (!tbody) return [];
     
-    const materiais = [];
-    const rows = tbody.querySelectorAll('tr');
+    const items = [];
     
-    rows.forEach(row => {
-        const cells = row.querySelectorAll('input');
-        if (cells.length >= 4 && cells[0].value) {
-            materiais.push([
-                cells[0].value,
-                cells[1].value,
-                cells[2].value,
-                cells[3].value
-            ]);
+    for (const row of tbody.rows) {
+        const item = row.querySelector('.item-input')?.value || '';
+        const quantidade = row.querySelector('.quantidade-input')?.value || '';
+        const valorUnitario = row.querySelector('.valor-unitario-input')?.value || '';
+        const valorTotal = row.querySelector('.valor-total-input')?.value || '';
+        
+        if (item && quantidade && valorUnitario) {
+            items.push({ item, quantidade, valorUnitario, valorTotal });
         }
-    });
+    }
     
-    return materiais;
+    return items;
 }
 
-function coletarEquipamentos() {
-    const tbody = document.querySelector('#equipamentosTable tbody');
-    if (!tbody) return [];
+/**
+ * Coleta dados do resumo
+ */
+function coletarResumo() {
+    return {
+        prazoExecucao: document.getElementById('prazoExecucao')?.value || '',
+        valorTotal: document.getElementById('valorTotal')?.value || ''
+    };
+}
+
+/**
+ * Envia proposta para o servidor
+ */
+async function enviarProposta() {
+    const dados = coletarDados();
     
-    const equipamentos = [];
-    const rows = tbody.querySelectorAll('tr');
+    // Validações básicas
+    if (!dados.dados.razaoSocial || !dados.dados.cnpj) {
+        alert('Por favor, preencha os campos obrigatórios (Razão Social e CNPJ).');
+        showTab('dados');
+        return;
+    }
     
-    rows.forEach(row => {
-        const cells = row.querySelectorAll('input');
-        if (cells.length >= 4 && cells[0].value) {
-            equipamentos.push([
-                cells[0].value,
-                cells[1].value,
-                cells[2].value,
-                cells[3].value
-            ]);
+    if (!dados.processo) {
+        alert('Por favor, informe o número do processo.');
+        return;
+    }
+    
+    try {
+        const response = await fetch(CONFIG.endpoints.enviarProposta, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(dados)
+        });
+        
+        const result = await response.json();
+        
+        const mensagemDiv = document.getElementById('mensagem');
+        if (!mensagemDiv) return;
+        
+        if (response.ok) {
+            mensagemDiv.innerHTML = `
+                <div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin-top: 20px;">
+                    <strong>✅ Proposta enviada com sucesso!</strong><br>
+                    Protocolo: <strong>${result.protocolo}</strong><br>
+                    Data: ${new Date(result.data_envio).toLocaleString('pt-BR')}
+                </div>
+            `;
+        } else {
+            if (result.erro === 'CNPJ_DUPLICADO') {
+                mensagemDiv.innerHTML = `
+                    <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin-top: 20px;">
+                        <strong>⚠️ CNPJ Duplicado</strong><br>
+                        ${result.mensagem}
+                    </div>
+                `;
+            } else {
+                throw new Error(result.erro || 'Erro desconhecido');
+            }
         }
-    });
+    } catch (error) {
+        console.error('Erro ao enviar proposta:', error);
+        const mensagemDiv = document.getElementById('mensagem');
+        if (mensagemDiv) {
+            mensagemDiv.innerHTML = `
+                <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin-top: 20px;">
+                    <strong>❌ Erro ao enviar proposta</strong><br>
+                    ${error.message}
+                </div>
+            `;
+        }
+    }
+}
+
+// ===== NAVEGAÇÃO ENTRE ABAS =====
+
+/**
+ * Mostra uma aba específica
+ */
+function showTab(tabName) {
+    // Esconder todas as seções
+    const sections = document.querySelectorAll('.form-section');
+    sections.forEach(section => section.classList.remove('active'));
     
-    return equipamentos;
+    // Remover classe active de todas as abas
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach(tab => tab.classList.remove('active'));
+    
+    // Mostrar seção selecionada
+    const targetSection = document.getElementById(tabName);
+    if (targetSection) {
+        targetSection.classList.add('active');
+    }
+    
+    // Ativar aba selecionada
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
+    
+    // Atualizar progresso
+    updateProgress(tabName);
+}
+
+/**
+ * Atualiza barra de progresso
+ */
+function updateProgress(currentTab) {
+    const progressMap = {
+        'dados': 25,
+        'tecnica': 50,
+        'comercial': 75,
+        'revisao': 100
+    };
+    
+    const progress = progressMap[currentTab] || 0;
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    
+    if (progressFill) progressFill.style.width = progress + '%';
+    if (progressText) progressText.textContent = progress + '%';
 }
 
 // ===== INICIALIZAÇÃO =====
 
+/**
+ * Inicializa o sistema quando a página carrega
+ */
 document.addEventListener('DOMContentLoaded', function() {
-    // Adicionar validação ao campo CNPJ
-    adicionarValidacaoCNPJ();
+    // Inicializar cronograma
+    inicializarCronograma();
     
-    // Adicionar listeners para cálculos
-    const inputs = [
-        'totalServicos', 'totalMaoObra', 'totalMateriais', 
-        'totalEquipamentos', 'bdiPercentual'
-    ];
+    // Configurar validação de CNPJ
+    configurarValidacaoCNPJ();
     
-    inputs.forEach(id => {
-        const input = document.getElementById(id);
-        if (input) {
-            input.addEventListener('change', calcularTotais);
-            input.addEventListener('blur', calcularTotais);
+    // Calcular totais inicial
+    calcularTotais();
+    
+    // Atualizar progresso inicial
+    updateProgress('dados');
+    
+    // Adicionar formatação de moeda aos campos existentes
+    const camposMoeda = document.querySelectorAll('.valor-unitario-input');
+    camposMoeda.forEach(campo => {
+        adicionarFormatacaoMoeda(campo);
+    });
+    
+    // Adicionar listeners para recálculo automático
+    document.addEventListener('input', function(e) {
+        if (e.target.classList.contains('duracao-input')) {
+            calcularCronograma();
+        } else if (e.target.classList.contains('quantidade-input') || 
+                   e.target.classList.contains('valor-unitario-input') ||
+                   e.target.id === 'bdiPercentual') {
+            calcularTotais();
         }
     });
     
-    // Inicializar cronograma se não houver linhas
-    const tbody = document.querySelector('#cronogramaTable tbody');
-    if (tbody && tbody.rows.length === 0) {
-        addCronogramaRow();
-    }
-    
-    // Substituir botão de enviar se existir
-    const btnEnviar = document.querySelector('button[onclick="enviarProposta()"]');
-    if (btnEnviar) {
-        btnEnviar.setAttribute('onclick', 'enviarPropostaComValidacao()');
-    }
-    
-    // Calcular totais iniciais
-    calcularTotais();
-    
-    // Configurar auto-save
-    setInterval(() => {
-        const dados = coletarDados();
-        localStorage.setItem('proposta_atual', JSON.stringify(dados));
-    }, 30000); // A cada 30 segundos
+    console.log('Sistema de propostas inicializado com sucesso!');
 });
 
-// ===== FUNÇÕES GLOBAIS PARA USO NO HTML =====
-window.calcularTotais = calcularTotais;
-window.calcularCronograma = calcularCronograma;
+// ===== EXPORTAR FUNÇÕES GLOBAIS =====
 window.addCronogramaRow = addCronogramaRow;
 window.removeRowAndRecalculate = removeRowAndRecalculate;
-window.enviarPropostaComValidacao = enviarPropostaComValidacao;
-window.verificarCNPJDuplicado = verificarCNPJDuplicado;
+window.calcularCronograma = calcularCronograma;
+window.calcularTotais = calcularTotais;
+window.addRow = addRow;
+window.showTab = showTab;
+window.enviarProposta = enviarProposta;
+window.formatarMoeda = formatarMoeda;
+window.parseMoeda = parseMoeda;
