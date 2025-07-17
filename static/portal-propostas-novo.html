@@ -440,17 +440,6 @@
             gap: 10px;
         }
 
-        /* AJUSTE ESPECÍFICO: Estilo para cronograma automatizado */
-        .cronograma-automatico-info {
-            background: #e8f5e8;
-            border: 1px solid #27ae60;
-            border-radius: 8px;
-            padding: 10px;
-            margin: 10px 0;
-            font-size: 14px;
-            color: #2c3e50;
-        }
-
         @media (max-width: 768px) {
             .container { padding: 10px; }
             .form-row, .form-row.triple { grid-template-columns: 1fr; }
@@ -697,7 +686,7 @@
             <div class="form-row single">
                 <div class="form-group">
                     <label for="prazoExecucao">Prazo Total <span class="required">*</span></label>
-                    <input type="text" id="prazoExecucao" placeholder="120 dias corridos" required readonly style="background: #f8f9fa;">
+                    <input type="text" id="prazoExecucao" placeholder="120 dias corridos" required>
                 </div>
             </div>
 
@@ -709,36 +698,28 @@
                 </div>
             </div>
 
-            <!-- AJUSTE ESPECÍFICO: Cronograma automatizado -->
-            <div class="section-title">3.11 Cronograma de Execução Automatizado</div>
-            <div class="cronograma-automatico-info">
-                <strong>💡 Cronograma Inteligente:</strong> Insira apenas a atividade e a duração em dias. 
-                As datas de início e fim serão calculadas automaticamente de forma sequencial.
-            </div>
+            <div class="section-title">3.11 Cronograma de Execução</div>
             <table class="dynamic-table" id="cronogramaTable">
                 <thead>
                     <tr>
                         <th>Atividade</th>
-                        <th>Duração (dias)</th>
-                        <th>Início (Calculado)</th>
-                        <th>Fim (Calculado)</th>
+                        <th>Duração</th>
+                        <th>Início</th>
+                        <th>Fim</th>
                         <th>Ação</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td><input type="text" placeholder="Mobilização" value="Mobilização"></td>
-                        <td><input type="number" placeholder="15" min="1" value="15" onchange="calcularCronograma()"></td>
-                        <td><input type="text" readonly value="Dia 1" style="background: #f8f9fa;"></td>
-                        <td><input type="text" readonly value="Dia 15" style="background: #f8f9fa;"></td>
-                        <td><button type="button" class="remove-btn" onclick="removeRowAndRecalculate(this)">×</button></td>
+                        <td><input type="text" placeholder="Mobilização"></td>
+                        <td><input type="text" placeholder="15 dias"></td>
+                        <td><input type="text" placeholder="Dia 1"></td>
+                        <td><input type="text" placeholder="Dia 15"></td>
+                        <td><button type="button" class="remove-btn" onclick="removeRow(this)">×</button></td>
                     </tr>
                 </tbody>
             </table>
             <button type="button" class="add-btn" onclick="addCronogramaRow()">+ Atividade</button>
-            <div style="text-align: right; margin-top: 10px; font-weight: bold; color: #2c3e50;">
-                Prazo Total Calculado: <span id="prazoTotalCronograma">15</span> dias
-            </div>
 
             <div class="section-title">3.12 Garantias Oferecidas</div>
             <div class="form-group">
@@ -1025,13 +1006,12 @@
                     <span><span id="bdiPercentual">0.0</span>% = R$ <span id="bdiValor">0,00</span></span>
                 </div>
                 <div class="total-line final-total">
-                    <span>VALOR TOTAL DA PROPOSTA (CUSTO DIRETO (MO + Mat + Equip)):</span>
+                    <span>VALOR TOTAL DA PROPOSTA:</span>
                     <span>R$ <span id="valorTotalCalculado">0,00</span></span>
                 </div>
             </div>
 
-            <!-- AJUSTE ESPECÍFICO: Nome alterado de "Condições e Premissas Adicionais" para "Condições" -->
-            <div class="section-title">4.8 Condições</div>
+            <div class="section-title">4.8 Condições e Premissas Adicionais</div>
             <div class="form-group">
                 <label for="validadeDetalhada">Condições de Validade</label>
                 <textarea id="validadeDetalhada" rows="3" placeholder="Proposta válida por 60 dias. Preços sujeitos a reajuste após este período."></textarea>
@@ -1098,50 +1078,6 @@
 
     <script>
         let currentTab = 'dados';
-
-        // ===== AJUSTE ESPECÍFICO: CRONOGRAMA AUTOMÁTICO =====
-        function addCronogramaRow() {
-            const tbody = document.querySelector('#cronogramaTable tbody');
-            const newRow = tbody.insertRow();
-            newRow.innerHTML = `
-                <td><input type="text" placeholder="Nova Atividade"></td>
-                <td><input type="number" placeholder="10" min="1" onchange="calcularCronograma()"></td>
-                <td><input type="text" readonly style="background: #f8f9fa;"></td>
-                <td><input type="text" readonly style="background: #f8f9fa;"></td>
-                <td><button type="button" class="remove-btn" onclick="removeRowAndRecalculate(this)">×</button></td>
-            `;
-            calcularCronograma();
-        }
-
-        function calcularCronograma() {
-            const tbody = document.querySelector('#cronogramaTable tbody');
-            let diaAtual = 1;
-            let prazoTotal = 0;
-            
-            for (const row of tbody.rows) {
-                const duracaoInput = row.cells[1].querySelector('input');
-                const duracao = parseInt(duracaoInput.value) || 0;
-                
-                if (duracao > 0) {
-                    const diaFim = diaAtual + duracao - 1;
-                    row.cells[2].querySelector('input').value = `Dia ${diaAtual}`;
-                    row.cells[3].querySelector('input').value = `Dia ${diaFim}`;
-                    diaAtual = diaFim + 1;
-                    prazoTotal += duracao;
-                } else {
-                    row.cells[2].querySelector('input').value = '';
-                    row.cells[3].querySelector('input').value = '';
-                }
-            }
-            
-            document.getElementById('prazoTotalCronograma').textContent = prazoTotal;
-            document.getElementById('prazoExecucao').value = `${prazoTotal} dias`;
-        }
-
-        function removeRowAndRecalculate(button) {
-            button.closest('tr').remove();
-            calcularCronograma();
-        }
 
 	// Funções de formatação de moeda
         function formatarMoeda(valor) {
@@ -1230,9 +1166,6 @@
                     })));
                 }
             }
-            
-            // Inicializar cronograma
-            calcularCronograma();
             
             updateProgress();
         });
@@ -1357,6 +1290,18 @@
                 <td><input type="text" placeholder="Unidade"></td>
                 <td><input type="number" placeholder="Quantidade"></td>
                 <td><input type="number" placeholder="4" step="0.1"></td>
+                <td><button type="button" class="remove-btn" onclick="removeRow(this)">×</button></td>
+            `;
+        }
+
+        function addCronogramaRow() {
+            const tbody = document.querySelector('#cronogramaTable tbody');
+            const newRow = tbody.insertRow();
+            newRow.innerHTML = `
+                <td><input type="text" placeholder="Atividade"></td>
+                <td><input type="text" placeholder="Duração"></td>
+                <td><input type="text" placeholder="Início"></td>
+                <td><input type="text" placeholder="Fim"></td>
                 <td><button type="button" class="remove-btn" onclick="removeRow(this)">×</button></td>
             `;
         }
@@ -1783,19 +1728,17 @@
             document.getElementById('bdiPercentual').textContent = totalBDI.toFixed(1);
     	    document.getElementById('bdiValor').textContent = formatarMoeda(valorBDI);
             document.getElementById('valorTotalCalculado').textContent = formatarMoeda(valorTotal);
-            
-            // AJUSTE ESPECÍFICO: Campo "Valor Total (Calculado Automaticamente)" igual ao VALOR TOTAL DA PROPOSTA
             document.getElementById('valorTotal').value = 'R$ ' + formatarMoeda(valorTotal);
             
             atualizarResumo();
         }
 
-        // AJUSTE ESPECÍFICO: CUSTO DIRETO = APENAS (MO + Mat + Equip) - SEM SERVIÇOS
         function calcularCustoDirecto() {
+            const servicos = calcularTotalServicos();
             const maoObra = calcularTotalMaoObra();
             const materiais = calcularTotalMateriais();
             const equipamentos = calcularTotalEquipamentos();
-            const total = maoObra + materiais + equipamentos;
+            const total = servicos + maoObra + materiais + equipamentos;
             
             document.getElementById('custoDirecto').textContent = formatarMoeda(total);
             return total;
@@ -2259,4 +2202,3 @@ document.addEventListener('DOMContentLoaded', function() {
     </script>
 </body>
 </html>
-
