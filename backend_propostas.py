@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from datetime import datetime
 import json
@@ -10,7 +10,7 @@ import uuid
 import logging
 
 # Configuração do Flask
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='')
 app.config['JSON_AS_ASCII'] = False  # Importante para UTF-8
 app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
 CORS(app)
@@ -62,21 +62,26 @@ carregar_propostas()
 
 @app.route('/', methods=['GET'])
 def home():
-    """Endpoint raiz com informações do sistema"""
-    return jsonify({
-        "message": "Servidor de propostas funcionando - UTF-8 CORRIGIDO",
-        "status": "online",
-        "endpoints": [
-            "/enviar-proposta",
-            "/status",
-            "/propostas/<id>",
-            "/propostas/listar"
-        ]
-    }), 200
+    """Endpoint raiz - serve o arquivo HTML principal"""
+    # Se existir um arquivo index.html na pasta static, serve ele
+    if os.path.exists(os.path.join('static', 'index.html')):
+        return send_from_directory('static', 'index.html')
+    else:
+        # Caso contrário, retorna informações da API
+        return jsonify({
+            "message": "Servidor de propostas funcionando - UTF-8 CORRIGIDO",
+            "status": "online",
+            "endpoints": [
+                "/enviar-proposta",
+                "/status",
+                "/propostas/<id>",
+                "/propostas/listar"
+            ]
+        }), 200
 
-@app.route('/status', methods=['GET'])
-def status():
-    """Verifica o status do servidor"""
+@app.route('/api/status', methods=['GET'])
+def api_status():
+    """Verifica o status do servidor via API"""
     return jsonify({
         "status": "online",
         "timestamp": datetime.now().isoformat(),
@@ -252,8 +257,10 @@ def erro_interno(e):
 
 if __name__ == '__main__':
     logger.info("Iniciando servidor de propostas...")
+    # Configuração para Render
+    port = int(os.environ.get('PORT', 5000))
     app.run(
         host='0.0.0.0',
-        port=5000,
-        debug=True
+        port=port,
+        debug=False  # Desabilitar debug em produção
     )
