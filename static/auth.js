@@ -13,7 +13,7 @@ const Auth = {
         
         if (!sessao) {
             // Não autenticado
-            window.location.href = 'login.html';
+            window.location.href = 'index.html';
             return false;
         }
         
@@ -91,7 +91,7 @@ const Auth = {
             alert(mensagem);
         }
         
-        window.location.href = 'login.html';
+        window.location.href = 'index.html';
     },
     
     // Redirecionar baseado no tipo de usuário
@@ -110,7 +110,7 @@ const Auth = {
                 window.location.href = 'dashboard-auditor.html';
                 break;
             default:
-                window.location.href = 'login.html';
+                window.location.href = 'index.html';
         }
     },
     
