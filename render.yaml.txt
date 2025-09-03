@@ -1,4 +1,0 @@
-# Substitua o conteúdo do render.yaml pelo novo
-git add render.yaml
-git commit -m "Ajustar configuração do Render"
-git push origin main
